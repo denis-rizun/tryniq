@@ -12,6 +12,8 @@ from app.ingest.client import MinioClient
 from app.ingest.router import router as ingest_router
 from app.logger import configure_logging
 from app.meeting.router import router as meeting_router
+from app.tasks import broker
+from app.transcript.router import router as transcript_router
 
 
 @asynccontextmanager
@@ -24,7 +26,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await storage.ensure_bucket()
     app.state.storage = storage
 
+    if not broker.is_worker_process:
+        await broker.startup()
+
     yield
+
+    if not broker.is_worker_process:
+        await broker.shutdown()
 
     await dispose_engine()
     logger.info("application ended")
@@ -47,6 +55,7 @@ app.add_middleware(
 
 app.include_router(meeting_router)
 app.include_router(ingest_router)
+app.include_router(transcript_router)
 
 register_exception_handler(app)
 
