@@ -6,6 +6,8 @@ from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
 import app.meeting.models
+import app.participant.models
+import app.transcript.models
 from alembic import context
 from app.config import config
 
