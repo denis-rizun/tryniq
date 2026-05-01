@@ -23,6 +23,18 @@ async def create_meeting(body: MeetingCreateRequest, service: MeetingServiceDep)
     return MeetingResponse.model_validate(instance)
 
 
+@router.get(
+    path="",
+    response_model=list[MeetingResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List meetings",
+    description="List all meetings.",
+)
+async def list_meetings(service: MeetingServiceDep) -> list[MeetingResponse]:
+    result = await service.list()
+    return [MeetingResponse.model_validate(model) for model in result]
+
+
 @router.patch(
     path="/{id}",
     response_model=MeetingResponse,
