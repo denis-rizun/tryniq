@@ -1,4 +1,4 @@
-# Tryniq (or Synapse) — Product Requirements Document
+# Tryniq — Product Requirements Document
 
 > **An open-source meeting intelligence platform that replaces tl;dv with a graph-based memory layer and architecturally clean per-speaker audio capture.**
 
@@ -8,7 +8,7 @@
 | **Status**            | Draft for hackathon kickoff                        |
 | **Last updated**      | 2026-04-30                                         |
 | **Target demo date**  | 2026-05-11, 16:00                                  |
-| **Project codename**  | Synapse                                            |
+| **Project codename**  | Tryniq                                            |
 | **Document owner**    | Engineering team                                   |
 | **Related challenge** | Open Voice Notetaker Challenge — tl;dv replacement |
 
@@ -24,7 +24,7 @@
 6. [Feature specifications](#6-feature-specifications)
 7. [System architecture](#7-system-architecture)
 8. [Data model](#8-data-model)
-9. [Service contracts](#9-service-contracts)
+9. [Internal contracts](#9-internal-contracts)
 10. [Model selection and comparison](#10-model-selection-and-comparison)
 11. [User experience and interface](#11-user-experience-and-interface)
 12. [Success metrics](#12-success-metrics)
@@ -38,11 +38,11 @@
 
 ## 1. Executive summary
 
-Synapse is an open-source meeting intelligence platform designed to replace tl;dv inside the company. Unlike traditional notetakers that produce flat text transcripts and bullet-list summaries, Synapse is built around two fundamental architectural decisions that set it apart from every existing competitor:
+Tryniq is an open-source meeting intelligence platform designed to replace tl;dv inside the company. Unlike traditional notetakers that produce flat text transcripts and bullet-list summaries, Tryniq is built around two fundamental architectural decisions that set it apart from every existing competitor:
 
-**First, Synapse captures audio per-speaker, in clean isolated streams, by intercepting WebRTC tracks inside the browser before they are mixed for playback.** This is achieved through a Chrome extension that monkey-patches `RTCPeerConnection` from the page's main world. The result is that every other team's hardest problem — speaker diarization — is solved architecturally rather than algorithmically. We don't need pyannote, Sortformer, or any diarization model for the live path, because we never receive a mixed stream.
+**First, Tryniq captures audio per-speaker, in clean isolated streams, by intercepting WebRTC tracks inside the browser before they are mixed for playback.** This is achieved through a Chrome extension that monkey-patches `RTCPeerConnection` from the page's main world. The result is that every other team's hardest problem — speaker diarization — is solved architecturally rather than algorithmically. We don't need pyannote, Sortformer, or any diarization model for the live path, because we never receive a mixed stream.
 
-**Second, Synapse models a meeting as a live knowledge graph rather than as a transcript.** Speakers, topics, decisions, action items, open questions, and entities become nodes connected by typed edges. The transcript is the raw input; the graph is the product. Notes, summaries, search, action items, and cross-meeting memory are all projections of the same graph. This makes Synapse a foundation for an organizational knowledge graph fed by meetings, rather than a single-meeting summarization tool.
+**Second, Tryniq models a meeting as a live knowledge graph rather than as a transcript.** Speakers, topics, decisions, action items, open questions, and entities become nodes connected by typed edges. The transcript is the raw input; the graph is the product. Notes, summaries, search, action items, and cross-meeting memory are all projections of the same graph. This makes Tryniq a foundation for an organizational knowledge graph fed by meetings, rather than a single-meeting summarization tool.
 
 The MVP delivers a working Chrome extension for Google Meet, an end-to-end pipeline for live and post-meeting transcription using Moonshine and faster-whisper, a real-time graph builder powered by structured-output LLM extraction, a web UI with synchronized transcript and graph visualization, cross-meeting speaker memory via ECAPA-TDNN embeddings, topic linking between meetings, retrieval-augmented question answering over completed meetings, and full export to Markdown.
 
@@ -100,7 +100,7 @@ A reviewer watching the demo should walk away with three impressions:
 - **NG5** — Multi-tenancy, organization-level RBAC, enterprise SSO. Single-team prototype only.
 - **NG6** — Speech-to-speech models (Moshi, etc.). Out of category.
 - **NG7** — Real-time translation.
-- **NG8** — A "meeting assistant" that participates in the conversation. Synapse listens; it does not speak.
+- **NG8** — A "meeting assistant" that participates in the conversation. Tryniq listens; it does not speak.
 
 ### 3.3 Long-term goals (post-MVP, signaled in demo)
 
@@ -149,11 +149,11 @@ This section exists because it is the single most important idea in the project 
 
 Conventional notetakers receive a single mixed audio stream containing all participants. They then run a diarization model (pyannote, Sortformer, WhisperX) to separate speakers, attempt to assign labels, and produce a transcript with speaker tags. Diarization is the bottleneck for quality, the source of most user-facing errors, and the hardest part of the pipeline to improve.
 
-### 5.2 The Synapse approach
+### 5.2 The Tryniq approach
 
 Inside a Google Meet browser tab, audio is delivered through `RTCPeerConnection` objects. Each remote participant arrives as a separate `MediaStreamTrack` of kind `audio`, with its own SSRC and track ID, before any client-side mixing. The browser only mixes these streams at the final playback step.
 
-Synapse intercepts these tracks at the source. A content script injects a script into the page's main world (Manifest V3 isolated worlds cannot see WebRTC objects), which monkey-patches `RTCPeerConnection.prototype.addTrack` and the `track` event. Each incoming audio track is routed into a separate `AudioWorkletProcessor`, downsampled to 16kHz, gated through Silero VAD, and streamed over a dedicated WebSocket to the gateway, tagged with the speaker's display name resolved from the participant tile in the DOM.
+Tryniq intercepts these tracks at the source. A content script injects a script into the page's main world (Manifest V3 isolated worlds cannot see WebRTC objects), which monkey-patches `RTCPeerConnection.prototype.addTrack` and the `track` event. Each incoming audio track is routed into a separate `AudioWorkletProcessor`, downsampled to 16kHz, gated through Silero VAD, and streamed over a dedicated WebSocket to the api process, tagged with the speaker's display name resolved from the participant tile in the DOM.
 
 ### 5.3 Consequences
 
@@ -185,14 +185,14 @@ This section enumerates every feature in the MVP, with detailed behavior, accept
 - When the user clicks "Start recording", the extension begins streaming all currently-active audio tracks plus future tracks as they appear.
 - For each track, a separate `AudioContext` and `AudioWorkletNode` resamples to 16 kHz mono int16 PCM.
 - Silero VAD (loaded as ONNX in the worklet) gates the stream — audio is sent only when the model reports speech, with a 200ms pre-roll to capture leading consonants.
-- A separate WebSocket per track is opened to the gateway, beginning with an `init` message and continuing with binary PCM frames.
+- A separate WebSocket per track is opened to the api process, beginning with an `init` message and continuing with binary PCM frames.
 - A `MutationObserver` on the participant container resolves track IDs to display names and detects active-speaker class changes.
 - On "Stop recording" or page unload, all streams emit `stream_end` and the meeting is marked ended on the backend.
 
 **Acceptance criteria.**
-- A two-person Meet produces exactly two WebSocket streams in the gateway, each containing only one voice when saved as WAV.
+- A two-person Meet produces exactly two WebSocket streams in the api, each containing only one voice when saved as WAV.
 - The local user's microphone is captured on a track flagged `is_local_user: true`.
-- Display names appear correctly in the gateway logs within 2 seconds of a participant joining.
+- Display names appear correctly in the api logs within 2 seconds of a participant joining.
 - The extension survives mid-meeting participant joins/leaves without restart.
 - The extension recovers gracefully if a WebSocket drops, with exponential backoff reconnect.
 
@@ -202,11 +202,11 @@ This section enumerates every feature in the MVP, with detailed behavior, accept
 
 ### 6.2 F2 — Live transcription
 
-**Description.** A streaming ASR worker transcribes incoming audio per-speaker with low latency, producing transcript segments visible in the UI within 1–3 seconds of speech.
+**Description.** A streaming ASR pipeline (running as a TaskIQ task in the worker process) transcribes incoming audio per-speaker with low latency, producing transcript segments visible in the UI within 1–3 seconds of speech.
 
 **Behavior.**
-- Worker subscribes to NATS subject `audio.>` and accumulates PCM frames per stream.
-- Transcription is triggered on VAD speech-end events or after 3 seconds of continuous speech, whichever comes first. We do not transcribe every 200ms chunk — that floods the model.
+- The api process accumulates PCM frames per stream into MinIO and enqueues a `transcribe_live(meeting_id, stream_id, object_key, t_start, t_end)` task at each VAD speech-end (or every 3 s of continuous speech).
+- The worker reads the audio segment from MinIO, transcribes it, and writes utterances to Postgres. We do not transcribe every 200ms chunk — that floods the model.
 - Moonshine-base (or Moonshine-tiny on CPU-constrained environments) is the live model.
 - Each transcript segment is published with `is_final: false`, indicating it may be revised by the post-meeting pass.
 - Segments include word-level timestamps where the model supports them.
@@ -225,11 +225,11 @@ This section enumerates every feature in the MVP, with detailed behavior, accept
 **Description.** After the meeting ends, a final-quality ASR pass runs on each speaker's full audio using faster-whisper large-v3, replacing live segments with refined versions.
 
 **Behavior.**
-- On `meeting.ended` event, the final ASR worker is triggered per stream.
-- Audio is loaded from MinIO (object storage), where the gateway has been persisting it during the meeting.
+- On `POST /meetings/{id}/end`, the api enqueues a `transcribe_final(meeting_id, stream_id)` task per stream.
+- The worker loads audio from MinIO (object storage), where the api has been persisting it during the meeting.
 - faster-whisper large-v3 runs with word-level timestamps, language=en.
 - Resulting segments are matched to existing live segments by time-overlap and replace them in Postgres.
-- The graph builder is re-run on the full refined transcript to produce a cleaner final graph.
+- The graph builder task is re-run on the full refined transcript to produce a cleaner final graph.
 - The UI receives a `transcript_finalized` event and switches display to the final version, with a toggle to view the live version for comparison.
 
 **Acceptance criteria.**
@@ -243,18 +243,18 @@ This section enumerates every feature in the MVP, with detailed behavior, accept
 
 ### 6.4 F4 — Meeting knowledge graph
 
-**Description.** A live-updating knowledge graph extracted from the transcript by an LLM, containing typed nodes and edges. This is the central differentiator of Synapse.
+**Description.** A live-updating knowledge graph extracted from the transcript by an LLM, containing typed nodes and edges. This is the central differentiator of Tryniq.
 
 **Node types.** `Meeting`, `Person`, `Topic`, `Decision`, `ActionItem`, `OpenQuestion`, `Entity`, `Utterance`. Full schema in section 8.
 
 **Edge types.** `PARTICIPATED_IN`, `DISCUSSED_IN`, `MADE_DECISION`, `ASSIGNED_TO`, `BLOCKS`, `ABOUT`, `MENTIONS`, `SOURCE`, `RELATES_TO`. Full schema in section 8.
 
 **Behavior.**
-- The aggregator emits a sliding window of the last 30 seconds of transcript to the graph builder every 15 seconds, or earlier if 50 new words have been added.
-- The graph builder sends the window plus a summary of the existing graph to an LLM with a structured-output prompt.
+- The aggregator (a periodic TaskIQ task in the worker process) emits a sliding window of the last 30 seconds of transcript every 15 seconds, or earlier if 50 new words have been added, by enqueueing a `build_graph(meeting_id, window)` task.
+- The graph builder task sends the window plus a summary of the existing graph to an LLM with a structured-output prompt.
 - The LLM returns a JSON array of graph operations: `add_node`, `add_edge`, `update_node`.
-- Operations are validated against a Pydantic schema and applied to Kuzu in a transaction.
-- A graph patch is broadcast to the UI over Server-Sent Events.
+- Operations are validated against a Pydantic schema and applied to the Postgres `graph_nodes` / `graph_edges` tables in a transaction.
+- A graph patch is published to Redis on `meeting:{id}:events`; the api forwards it to the UI over Server-Sent Events.
 - Idempotency: before adding a node, the builder computes a text embedding and checks similarity (cosine > 0.85) with existing nodes of the same type. If similar, it merges instead of duplicating.
 - Every `Decision`, `ActionItem`, and `OpenQuestion` node MUST have a `SOURCE` edge to the `Utterance` it was extracted from. This is non-negotiable — it is the grounding mechanism that prevents hallucination and enables jump-to-time.
 
@@ -264,7 +264,7 @@ This section enumerates every feature in the MVP, with detailed behavior, accept
 - Across a 10-minute test meeting with scripted decisions and action items, precision and recall on extracted decisions are both above 70%.
 - Every extracted decision links to a real utterance.
 - Duplicate nodes do not appear when the same topic is discussed across multiple windows.
-- The graph builder recovers from LLM failures (timeout, malformed JSON) without corrupting state — failed windows are retried or skipped, and the meeting continues.
+- The graph builder task recovers from LLM failures (timeout, malformed JSON) without corrupting state — failed windows are retried via TaskIQ or skipped, and the meeting continues.
 
 **Dependencies.** F2.
 
@@ -318,9 +318,9 @@ This section enumerates every feature in the MVP, with detailed behavior, accept
 **Description.** Persistent voice-print embeddings allow speakers to be recognized across meetings without manual tagging.
 
 **Behavior.**
-- After a meeting ends, for each speaker the system extracts ~30 seconds of clean audio and computes an ECAPA-TDNN embedding.
+- After a meeting ends, the api enqueues a `compute_speaker_embeddings(meeting_id)` task. For each speaker the worker extracts ~30 seconds of clean audio from MinIO and computes an ECAPA-TDNN embedding.
 - The embedding is stored in Postgres with a foreign key to the `Person` node, keyed by display name.
-- When a new meeting starts and a new track appears with a previously-unknown name, the system computes a temporary embedding and queries the database for nearest neighbor (cosine similarity).
+- When a new meeting starts and a new track appears with a previously-unknown name, a `match_speaker(stream_id)` task computes a temporary embedding and queries the database for nearest neighbor (cosine similarity).
 - If a match exists with similarity > 0.7, the system flags this as "this voice matches Sarah Chen from previous meetings" and offers to link the identities.
 - Manual override is always available.
 
@@ -339,7 +339,7 @@ This section enumerates every feature in the MVP, with detailed behavior, accept
 
 **Behavior.**
 - Each `Topic` node has an embedding computed from its title and summary.
-- When a new topic is created, the graph builder queries pgvector for nearest neighbors (cosine similarity > 0.8) among all historical topics.
+- When a new topic is created, the graph builder task queries pgvector for nearest neighbors (cosine similarity > 0.8) among all historical topics.
 - Matches are connected via `RELATES_TO` edges.
 - The notes panel surfaces this as "Related discussion from [date]" with a link to the previous meeting.
 - The graph view shows ghosted nodes from past meetings as faded outlines, clickable to open the historical context.
@@ -507,64 +507,67 @@ This section enumerates every feature in the MVP, with detailed behavior, accept
 
 ## 7. System architecture
 
+The backend is **one Python codebase** (`tryniq/`) run as **two processes** — `api` and `worker` — backed by three infrastructure containers (Postgres, MinIO, Redis). Both processes import the same modules; they are not separate services with API contracts between them, just two ways of running the same code.
+
 ### 7.1 High-level diagram
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  BROWSER                                                │
-│  ┌──────────┐  ┌────────────┐  ┌──────────────┐         │
-│  │ Content  │→ │ WebRTC tap │→ │ AudioWorklet │         │
-│  │ script   │  │ (main world)│ │ + Silero VAD│         │
-│  └──────────┘  └────────────┘  └───────┬──────┘         │
-│       │                                 │                │
-│       ▼                                 ▼                │
-│  ┌──────────────┐               ┌─────────────┐          │
-│  │ DOM observer │               │ WS clients  │          │
-│  │ (names + AS) │               │ (per stream)│          │
-│  └──────────────┘               └──────┬──────┘          │
-└──────────────────────────────────────────┼───────────────┘
-                                           │
-                                           ▼  WebSocket(s)
-┌──────────────────────────────────────────────────────────┐
-│  BACKEND (Docker Compose)                                │
-│                                                          │
-│  ┌──────────┐    ┌──────────┐                           │
-│  │ Gateway  │───→│ MinIO    │                           │
-│  │ FastAPI  │    │ (audio)  │                           │
-│  └────┬─────┘    └──────────┘                           │
-│       │                                                  │
-│       ▼                                                  │
-│  ┌──────────┐                                           │
-│  │  NATS    │  ← message bus for all inter-service comm │
-│  │ JetStream│                                           │
-│  └────┬─────┘                                           │
-│       │                                                  │
-│       ├──────→ ASR Live (Moonshine) ──→ transcripts     │
-│       ├──────→ ASR Final (Whisper)  ──→ transcripts     │
-│       └──────→ Speaker ID (ECAPA)   ──→ embeddings      │
-│                                                          │
-│  ┌──────────────┐    ┌──────────────────┐               │
-│  │ Aggregator   │───→│ Graph Builder    │               │
-│  │ (timeline)   │    │ (LLM extraction) │               │
-│  └──────┬───────┘    └────────┬─────────┘               │
-│         │                     │                          │
-│         ▼                     ▼                          │
-│  ┌──────────────────────────────────┐                   │
-│  │ State stores                     │                   │
-│  │ - Postgres (utterances, meta)    │                   │
-│  │ - pgvector (embeddings)          │                   │
-│  │ - Kuzu (graph)                   │                   │
-│  └──────────────┬───────────────────┘                   │
-│                 │                                        │
-│                 ▼                                        │
-│  ┌──────────────────┐                                   │
-│  │ SSE / WS to UI   │                                   │
-│  └────────┬─────────┘                                   │
-└───────────┼──────────────────────────────────────────────┘
-            │
+┌─────────────────────────────────────────────────────────────┐
+│  BROWSER                                                    │
+│  ┌──────────┐  ┌────────────┐  ┌──────────────┐             │
+│  │ Content  │→ │ WebRTC tap │→ │ AudioWorklet │             │
+│  │ script   │  │ (main world)│ │ + Silero VAD│             │
+│  └──────────┘  └────────────┘  └───────┬──────┘             │
+│       │                                 │                    │
+│       ▼                                 ▼                    │
+│  ┌──────────────┐               ┌─────────────┐              │
+│  │ DOM observer │               │ WS clients  │              │
+│  │ (names + AS) │               │ (per stream)│              │
+│  └──────────────┘               └──────┬──────┘              │
+└──────────────────────────────────────────┼───────────────────┘
+                                           │ WebSocket(s)
+                                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│  BACKEND (Docker Compose)                                    │
+│                                                              │
+│   ┌──────────────────────┐                                   │
+│   │  api  (FastAPI)      │  async only                       │
+│   │  - REST              │                                   │
+│   │  - WS /ingest        │──── streams PCM ──▶ MinIO         │
+│   │  - SSE /events       │                                   │
+│   │  - enqueues tasks    │                                   │
+│   └──┬───────────────┬───┘                                   │
+│      │               ▲                                       │
+│      │ task.kiq()    │ pub/sub                               │
+│      ▼               │ meeting:{id}:events                   │
+│   ┌─────────────────────┐                                    │
+│   │       Redis         │  TaskIQ broker + UI pub/sub        │
+│   └──┬───────────────▲──┘                                    │
+│      │ consume       │ publish                               │
+│      ▼               │                                       │
+│   ┌──────────────────┴───┐                                   │
+│   │  worker (TaskIQ)     │  CPU/GPU/LLM-bound work           │
+│   │  - asr_live          │                                   │
+│   │  - asr_final         │  reads PCM ──▶ MinIO              │
+│   │  - aggregator        │                                   │
+│   │  - graph_builder     │  writes ──▶ Postgres              │
+│   │  - speaker_id        │                                   │
+│   └──────────────────────┘                                   │
+│                                                              │
+│   ┌──────────────┐  ┌──────────┐  ┌──────────┐               │
+│   │  Postgres    │  │  MinIO   │  │  Redis   │               │
+│   │  + pgvector  │  │  (audio) │  │ (broker  │               │
+│   │  meetings,   │  │          │  │  + p/sub)│               │
+│   │  utterances, │  │          │  │          │               │
+│   │  graph_nodes,│  │          │  │          │               │
+│   │  graph_edges,│  │          │  │          │               │
+│   │  embeddings  │  │          │  │          │               │
+│   └──────────────┘  └──────────┘  └──────────┘               │
+└──────────────────────────────────────────────────────────────┘
+            │ SSE
             ▼
    ┌─────────────────┐
-   │ Web UI (Next.js)│
+   │ Web UI (Next.js)│  separate frontend container
    │ - transcript    │
    │ - graph         │
    │ - notes         │
@@ -572,29 +575,31 @@ This section enumerates every feature in the MVP, with detailed behavior, accept
    └─────────────────┘
 ```
 
-### 7.2 Service responsibilities
+### 7.2 Process responsibilities
 
-| Service | Responsibility | Stateful? |
+| Process / container | Responsibility | Stateful? |
 |---|---|---|
 | Extension | Capture, VAD, name resolution | No |
-| Gateway | WebSocket termination, audio persistence to MinIO, NATS publishing | No (writes only) |
-| ASR Live | Stream-to-text with Moonshine | No |
-| ASR Final | Batch refinement with Whisper after meeting end | No |
-| Aggregator | Merge per-speaker streams into unified timeline; emit windows | Yes (in Postgres) |
-| Graph Builder | LLM extraction; node deduplication; graph patch publishing | Yes (in Kuzu) |
-| Speaker ID | ECAPA embeddings on completed meetings | Yes (in Postgres) |
-| UI Server (Next.js) | Web frontend; SSE bridge from Redis pub/sub | No |
+| `api` | WebSocket termination, audio persistence to MinIO, REST, SSE bridge from Redis pub/sub, task enqueueing | No (writes only) |
+| `worker` | Live ASR, final ASR, aggregator window emission, graph builder LLM extraction, speaker ID, embeddings | Writes to Postgres / MinIO |
+| Postgres + pgvector | Meetings, utterances, `graph_nodes`, `graph_edges`, embeddings, speaker profiles | Yes |
+| MinIO | Per-speaker WAVs and exports | Yes |
+| Redis | TaskIQ broker; pub/sub channel for UI events | Ephemeral |
+| UI (Next.js) | Web frontend | No |
+
+Pipeline modules (`asr_live`, `asr_final`, `aggregator`, `graph_builder`, `speaker_id`) are pure Python modules in `src/tryniq/pipeline/`, called from TaskIQ tasks in `src/tryniq/tasks/`. They are not separate services.
 
 ### 7.3 Communication patterns
 
-- **Browser ↔ Gateway:** WebSocket. One per audio stream.
-- **Inter-service backend:** NATS JetStream subjects. All payloads JSON, schemas in shared/schemas.
-- **Backend → UI:** SSE for real-time updates; REST for historical queries.
-- **UI → Backend:** REST for queries and corrections.
+- **Browser ↔ api:** WebSocket. One per audio stream. SSE for live UI updates.
+- **api → worker:** TaskIQ tasks (`task.kiq(...)`), Redis-backed broker. Tasks receive object keys / row IDs only — never raw PCM.
+- **worker → api:** Redis pub/sub on channel `meeting:{id}:events`. The api process subscribes per active SSE connection and forwards JSON payloads to the UI.
+- **worker → state:** direct Postgres / MinIO writes.
+- **UI → api:** REST for queries and corrections; SSE for live updates.
 
 ### 7.4 Deployment topology (MVP)
 
-Single Docker Compose stack on a developer machine or single server. No Kubernetes, no service mesh, no production infrastructure. Production hardening is post-MVP.
+Single Docker Compose stack on a developer machine or single server. Three infra containers (Postgres, MinIO, Redis) plus two app containers (`api`, `worker`) built from the same image. Scale workers horizontally by running additional `worker` containers against the same Redis. No Kubernetes, no service mesh, no production infrastructure. Production hardening is post-MVP.
 
 ---
 
@@ -666,55 +671,63 @@ CREATE TABLE topic_embeddings (
     meeting_id UUID REFERENCES meetings(id),
     embedding VECTOR(384)
 );
+
+-- Knowledge graph: nodes
+-- type ∈ {Meeting, Person, Topic, Decision, ActionItem, OpenQuestion, Entity, Utterance}
+-- fields holds type-specific attributes (title, text, t_start, t_end, due_date, etc.)
+-- status ∈ {provisional, confirmed, superseded} (NULL for non-extractable types)
+CREATE TABLE graph_nodes (
+    id UUID PRIMARY KEY,
+    meeting_id UUID REFERENCES meetings(id),
+    type TEXT NOT NULL,
+    fields JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_graph_nodes_meeting ON graph_nodes(meeting_id);
+CREATE INDEX idx_graph_nodes_type ON graph_nodes(meeting_id, type);
+
+-- Knowledge graph: edges
+-- type ∈ {PARTICIPATED_IN, DISCUSSED_IN, MADE_DECISION, ASSIGNED_TO,
+--         BLOCKS, ABOUT_TOPIC, MENTIONS, SOURCE, RELATES_TO}
+CREATE TABLE graph_edges (
+    id UUID PRIMARY KEY,
+    meeting_id UUID REFERENCES meetings(id),
+    type TEXT NOT NULL,
+    from_id UUID REFERENCES graph_nodes(id) ON DELETE CASCADE,
+    to_id UUID REFERENCES graph_nodes(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_graph_edges_meeting ON graph_edges(meeting_id);
+CREATE INDEX idx_graph_edges_from ON graph_edges(from_id);
+CREATE INDEX idx_graph_edges_to ON graph_edges(to_id);
 ```
 
-### 8.2 Kuzu graph schema
+### 8.2 Graph node and edge types
 
-```cypher
-CREATE NODE TABLE Meeting (id UUID PRIMARY KEY, title STRING, started_at TIMESTAMP);
-CREATE NODE TABLE Person (id UUID PRIMARY KEY, display_name STRING);
-CREATE NODE TABLE Topic (
-    id UUID PRIMARY KEY, title STRING, summary STRING,
-    t_start DOUBLE, t_end DOUBLE, status STRING
-);
-CREATE NODE TABLE Decision (
-    id UUID PRIMARY KEY, text STRING, t DOUBLE,
-    confidence DOUBLE, status STRING
-);
-CREATE NODE TABLE ActionItem (
-    id UUID PRIMARY KEY, text STRING, t DOUBLE,
-    due_date STRING, status STRING
-);
-CREATE NODE TABLE OpenQuestion (
-    id UUID PRIMARY KEY, text STRING, t DOUBLE,
-    answered BOOLEAN
-);
-CREATE NODE TABLE Entity (
-    id UUID PRIMARY KEY, name STRING, type STRING
-);
-CREATE NODE TABLE Utterance (
-    id UUID PRIMARY KEY, t_start DOUBLE, t_end DOUBLE, text STRING
-);
+The graph lives in the two Postgres tables above. Logical schema:
 
-CREATE REL TABLE PARTICIPATED_IN (FROM Person TO Meeting);
-CREATE REL TABLE DISCUSSED_IN (FROM Topic TO Meeting);
-CREATE REL TABLE MADE_DECISION (FROM Person TO Decision);
-CREATE REL TABLE ASSIGNED_TO (FROM ActionItem TO Person);
-CREATE REL TABLE BLOCKS (FROM OpenQuestion TO Decision);
-CREATE REL TABLE ABOUT_TOPIC (FROM Decision TO Topic, FROM ActionItem TO Topic);
-CREATE REL TABLE MENTIONS (FROM Utterance TO Entity, FROM Utterance TO Person);
-CREATE REL TABLE SOURCE (
-    FROM Decision TO Utterance,
-    FROM ActionItem TO Utterance,
-    FROM OpenQuestion TO Utterance
-);
-CREATE REL TABLE RELATES_TO (FROM Topic TO Topic);
-```
+**Node types** (`graph_nodes.type`):
+
+| Type | Notable `fields` keys |
+|---|---|
+| `Meeting` | `title`, `started_at` |
+| `Person` | `display_name` |
+| `Topic` | `title`, `summary`, `t_start`, `t_end` |
+| `Decision` | `text`, `t`, `confidence` |
+| `ActionItem` | `text`, `t`, `due_date` |
+| `OpenQuestion` | `text`, `t`, `answered` |
+| `Entity` | `name`, `kind` |
+| `Utterance` | `t_start`, `t_end`, `text` |
+
+**Edge types** (`graph_edges.type`): `PARTICIPATED_IN` (Person→Meeting), `DISCUSSED_IN` (Topic→Meeting), `MADE_DECISION` (Person→Decision), `ASSIGNED_TO` (ActionItem→Person), `BLOCKS` (OpenQuestion→Decision), `ABOUT_TOPIC` (Decision/ActionItem→Topic), `MENTIONS` (Utterance→Entity/Person), `SOURCE` (Decision/ActionItem/OpenQuestion→Utterance), `RELATES_TO` (Topic→Topic, including cross-meeting).
+
+The graph builder validates type compatibility (allowed `from_type → to_type` pairs) at the application layer before insertion.
 
 ### 8.3 Object storage layout (MinIO)
 
 ```
-synapse-bucket/
+tryniq-bucket/
   meetings/
     {meeting_id}/
       streams/
@@ -725,11 +738,11 @@ synapse-bucket/
 
 ---
 
-## 9. Service contracts
+## 9. Internal contracts
 
-### 9.1 Extension → Gateway WebSocket
+### 9.1 Extension → api WebSocket
 
-**URL:** `wss://gateway/ingest/{meeting_id}/{stream_id}`
+**URL:** `wss://api/ingest/{meeting_id}/{stream_id}`
 
 **Init message** (text frame, must be first):
 ```json
@@ -762,15 +775,32 @@ synapse-bucket/
 { "type": "stream_end" }
 ```
 
-### 9.2 NATS subjects
+### 9.2 TaskIQ tasks and Redis channels
 
-| Subject | Direction | Payload |
-|---|---|---|
-| `audio.{meeting}.{stream}` | Gateway → ASR Live | Audio segment metadata + ref |
-| `transcript.{meeting}` | ASR workers → Aggregator | Transcript segment |
-| `timeline.{meeting}.window` | Aggregator → Graph Builder | Sliding window |
-| `graph.{meeting}.patch` | Graph Builder → UI bridge | Graph operations |
-| `meeting.lifecycle` | Gateway → all | `started`, `ended` events |
+There is no message bus. Cross-process communication is (a) TaskIQ tasks for api→worker work dispatch, and (b) Redis pub/sub for worker→api UI events.
+
+**TaskIQ task signatures** (defined in `src/tryniq/tasks/`, all coroutines):
+
+| Task | Args | Producer | Purpose |
+|---|---|---|---|
+| `transcribe_live` | `(meeting_id, stream_id, object_key, t_start, t_end)` | api (on VAD speech-end) | Stream-to-text with Moonshine; writes `utterances` with `is_final=false` |
+| `transcribe_final` | `(meeting_id, stream_id)` | api (on meeting end) | Whisper large-v3 on the full per-speaker WAV; replaces live segments |
+| `aggregate_window` | `(meeting_id,)` | self-scheduled (every 15 s while live) | Builds 30 s sliding window; enqueues `build_graph` if changed |
+| `build_graph` | `(meeting_id, window_id)` | aggregator | LLM extraction; node dedup; writes `graph_nodes` / `graph_edges` |
+| `compute_speaker_embeddings` | `(meeting_id,)` | api (on meeting end) | ECAPA per speaker; updates `voice_embeddings` |
+| `match_speaker` | `(meeting_id, stream_id)` | api (on new stream) | Nearest-neighbor against historical voice embeddings |
+| `embed_utterances` | `(meeting_id,)` | api (on meeting end) | Populates `utterance_embeddings` for RAG |
+| `rebuild_window` | `(meeting_id, t_start, t_end)` | api (on transcript edit) | Localized graph re-extraction over an edited region |
+
+All tasks are **idempotent** (use deterministic IDs / upsert semantics) so TaskIQ retries on the Redis broker are safe.
+
+**Redis pub/sub channels** (worker → api → UI via SSE):
+
+| Channel | Payloads |
+|---|---|
+| `meeting:{meeting_id}:events` | `{ "kind": "transcript_segment", ... }`, `{ "kind": "graph_patch", "ops": [...] }`, `{ "kind": "meeting_lifecycle", "event": "started" \| "ended" }`, `{ "kind": "transcript_finalized" }`, `{ "kind": "speaker_match", ... }` |
+
+The api process maintains one Redis subscription per active SSE client and forwards JSON payloads unchanged. Payload schemas are Pydantic models in `src/tryniq/models/`.
 
 ### 9.3 REST API
 
@@ -815,7 +845,7 @@ Recent transcript window (with utterance ids):
 Output (JSON array only, no prose):
 ```
 
-Response is parsed, validated against a Pydantic schema, and applied transactionally to Kuzu.
+Response is parsed, validated against a Pydantic schema, and applied transactionally to the Postgres `graph_nodes` / `graph_edges` tables.
 
 ---
 
@@ -856,7 +886,7 @@ The model card will answer the explicit questions from the challenge brief: whic
 Compact popup with:
 - Recording status indicator (red circle when recording)
 - Start / Stop button
-- Connection status to gateway
+- Connection status to api
 - Participant list with active-speaker highlight
 - Link to "Open meeting view" (opens web UI)
 
@@ -942,7 +972,8 @@ These map directly to the challenge rubric:
 | R3 | LLM returns malformed JSON or hallucinates non-existent utterance IDs | Medium | Medium | Pydantic validation; reject unknown IDs; retry once; otherwise skip window and continue |
 | R4 | Graph deduplication threshold too aggressive — merges distinct topics | Medium | Medium | Tune threshold on test meetings; allow manual split in UI |
 | R5 | Live ASR latency exceeds 3s on developer hardware | Medium | Medium | Use Moonshine-tiny if needed; reduce window size; ensure GPU available for demo |
-| R6 | NATS / Postgres / Kuzu dependency conflicts in Docker | Low | High | Lock all images by digest; CI run on clean machine |
+| R6 | Postgres / Redis / MinIO dependency conflicts in Docker | Low | High | Lock all images by digest; CI run on clean machine |
+| R6b | Worker process crashes mid-task (LLM hang, OOM on Whisper, Python fault) | Medium | Medium | TaskIQ retries on the Redis-backed broker; tasks are designed idempotent (deterministic IDs, upsert semantics) so retries do not double-write |
 | R7 | Demo-day Meet audio path differs from dev environment | Low | High | Rehearse from clean machines; record backup video |
 | R8 | Self-track (local mic) creates duplicate transcript with remote echo | Medium | Low | Detect and flag local track; allow toggle in popup |
 | R9 | Graph builder LLM costs exceed budget during testing | Medium | Low | Cache results; use Haiku not Opus; rate-limit window emission |
@@ -955,19 +986,19 @@ These map directly to the challenge rubric:
 Seven daily phases, each ending with a working end-to-end milestone in its own scope.
 
 ### Phase 0 — Setup (day 0, ~4 hours)
-- Monorepo, Docker Compose with health checks, Makefile, lint config, empty extension.
-- **Done when:** `make up` brings up all services with green health checks; extension logs in Meet.
+- Single-package monorepo (`src/tryniq/`), Docker Compose with health checks (postgres, redis, minio, api, worker), Makefile, lint config, empty extension. TaskIQ broker wired to Redis; one trivial `ping` task end-to-end.
+- **Done when:** `docker compose up` brings up all containers with green health checks; `task.kiq()` from api runs in worker; extension logs in Meet.
 
 ### Phase 1 — Capture (day 1)
-- WebRTC tap, AudioWorklet, Silero VAD, DOM name resolution, WebSocket streaming.
+- WebRTC tap, AudioWorklet, Silero VAD, DOM name resolution, WebSocket streaming. The api process streams PCM to MinIO.
 - **Done when:** two-person Meet produces two clean per-speaker WAV files in MinIO with correct names.
 
 ### Phase 2 — Transcription (day 2)
-- Moonshine live worker, Whisper final worker, aggregator, minimal UI showing live transcript.
+- `transcribe_live` and `transcribe_final` tasks, aggregator scaffolding, minimal UI showing live transcript via SSE bridged from Redis pub/sub.
 - **Done when:** speech in Meet appears in UI within 3 seconds with correct speaker labels; final pass refines the transcript after meeting end.
 
 ### Phase 3 — Graph builder core (day 3)
-- Kuzu schema, sliding window emission, LLM prompt with structured output, idempotency, source edges.
+- Postgres `graph_nodes` / `graph_edges` schema, `aggregate_window` + `build_graph` tasks, LLM prompt with structured output, idempotency, source edges.
 - **Done when:** a 5-minute scripted meeting produces a graph with correct decisions and action items, all grounded to utterances.
 
 ### Phase 4 — Graph UI and notes (day 4)
@@ -975,7 +1006,7 @@ Seven daily phases, each ending with a working end-to-end milestone in its own s
 - **Done when:** graph and notes update live; clicking a decision jumps the transcript to its source.
 
 ### Phase 5 — Cross-meeting memory and post-processing (day 5)
-- ECAPA speaker embeddings, topic embedding linking, full-meeting graph re-extraction after final ASR, Markdown export.
+- `compute_speaker_embeddings`, `match_speaker`, `embed_utterances` tasks; topic embedding linking, full-meeting graph re-extraction after final ASR, Markdown export.
 - **Done when:** two consecutive test meetings show speaker recognition and topic linking; export produces clean Markdown.
 
 ### Phase 6 — Killer features and polish (day 6)
@@ -1035,21 +1066,50 @@ These are decisions deferred until implementation reveals more:
 ### 17.1 Glossary
 
 - **WebRTC tap.** The technique of intercepting `RTCPeerConnection` audio tracks before they are mixed for playback.
-- **Diarization.** The process of separating "who spoke when" from a mixed audio recording. Synapse avoids this for the live path.
-- **Active speaker detection.** Identifying which participant is currently speaking. Synapse derives this from Meet's DOM CSS classes.
+- **Diarization.** The process of separating "who spoke when" from a mixed audio recording. Tryniq avoids this for the live path.
+- **Active speaker detection.** Identifying which participant is currently speaking. Tryniq derives this from Meet's DOM CSS classes.
 - **Grounding.** The practice of linking every extracted artifact (decision, action item) back to a specific source utterance, preventing hallucination.
 - **Provisional / confirmed / superseded.** Lifecycle statuses for graph nodes that may change as the meeting evolves.
 - **Sliding window.** The 30-second moving slice of transcript fed to the graph LLM every 15 seconds.
 
 ### 17.2 Repository structure
 
+Single Python package; `api` and `worker` are two entry points into the same code.
+
 ```
-synapse/
+tryniq/
 ├── README.md
 ├── Makefile
 ├── docker-compose.yml
 ├── .env.example
-├── extension/
+├── pyproject.toml
+├── src/tryniq/
+│   ├── api/                     # FastAPI app: REST, WS /ingest, SSE
+│   │   ├── main.py
+│   │   ├── ingest.py            # WS handler, streams PCM → MinIO
+│   │   ├── meetings.py          # REST endpoints
+│   │   └── events.py            # SSE bridge from Redis pub/sub
+│   ├── tasks/                   # TaskIQ task definitions
+│   │   ├── __init__.py          # exports `broker`
+│   │   ├── transcribe.py        # transcribe_live, transcribe_final
+│   │   ├── aggregate.py         # aggregate_window
+│   │   ├── graph.py             # build_graph, rebuild_window
+│   │   ├── speaker.py           # compute_speaker_embeddings, match_speaker
+│   │   └── embed.py             # embed_utterances
+│   ├── pipeline/                # pure modules called from tasks
+│   │   ├── asr_live.py
+│   │   ├── asr_final.py
+│   │   ├── aggregator.py
+│   │   ├── graph_builder.py
+│   │   └── speaker_id.py
+│   ├── storage/
+│   │   ├── pg.py
+│   │   ├── minio.py
+│   │   └── redis.py
+│   ├── llm/                     # provider abstraction (Anthropic / Ollama / vLLM)
+│   ├── models/                  # Pydantic schemas (WS init, lifecycle, graph ops)
+│   └── config.py
+├── extension/                   # Chrome MV3 extension, separate package
 │   ├── manifest.json
 │   ├── src/
 │   │   ├── background.ts
@@ -1060,14 +1120,7 @@ synapse/
 │   │   └── ws-client.ts
 │   ├── vendor/silero_vad.onnx
 │   └── vite.config.ts
-├── services/
-│   ├── gateway/
-│   ├── asr-live/
-│   ├── asr-final/
-│   ├── aggregator/
-│   ├── graph-builder/
-│   └── speaker-id/
-├── ui/
+├── ui/                          # Next.js, separate package
 │   ├── app/
 │   │   └── m/[meetingId]/page.tsx
 │   ├── components/
@@ -1076,13 +1129,8 @@ synapse/
 │   │   ├── NotesPanel.tsx
 │   │   └── MeetingChat.tsx
 │   └── store/
-├── shared/
-│   ├── schemas/                 # Pydantic + Zod
-│   └── proto/                   # NATS subject definitions
 ├── infra/
-│   ├── postgres/init.sql
-│   ├── kuzu/schema.cypher
-│   └── nats/server.conf
+│   └── postgres/init.sql
 └── tests/
     ├── fixtures/
     └── e2e/

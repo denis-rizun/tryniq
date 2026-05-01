@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-This repository is at the **pre-implementation stage**. The only artifacts are `docs/PRD.md` (the source of truth), an empty `pyproject.toml` (Python ≥3.14, no deps yet), and an empty `README.md`. There is no code, no Makefile, no docker-compose.yml, no extension scaffold yet — when these are added, this file should be updated with the actual build/lint/test commands.
+This repository is in **Phase 1 (Capture)**. See `docs/phase-1-spec.md` for the executable spec. Phase 1 builds the Chrome MV3 extension and the minimal `api` process (FastAPI) needed to persist per-speaker WAVs to MinIO. Downstream pipeline modules (ASR, aggregator, graph builder, UI) are deferred.
 
-The codename in the PRD is **Synapse**; the repo is named **tryniq**. Treat them as the same project.
+Runtime: Python **3.13** for the `tryniq` package (broad wheel coverage), Node 20 + pnpm for the extension and UI.
 
 Target demo: 2026-05-11. Phased plan in PRD §14 (Phase 0 setup → Phase 7 demo rehearsal).
 
@@ -16,7 +16,7 @@ An open-source, self-hostable meeting intelligence platform — a tl;dv replacem
 
 ### Architectural commitment 1: per-speaker audio via WebRTC tap
 
-**We do not run speaker diarization on the live path.** A Chrome extension monkey-patches `RTCPeerConnection` from the page's main world (Manifest V3 isolated worlds cannot see WebRTC objects) to intercept each remote participant's `MediaStreamTrack` *before* the browser mixes them for playback. Each track is routed through its own `AudioWorkletProcessor` (16 kHz mono int16, Silero VAD-gated) and streamed over its own WebSocket to the gateway, tagged with the display name resolved from the Meet DOM.
+**We do not run speaker diarization on the live path.** A Chrome extension monkey-patches `RTCPeerConnection` from the page's main world (Manifest V3 isolated worlds cannot see WebRTC objects) to intercept each remote participant's `MediaStreamTrack` *before* the browser mixes them for playback. Each track is routed through its own `AudioWorkletProcessor` (16 kHz mono int16, Silero VAD-gated) and streamed over its own WebSocket to the api process, tagged with the display name resolved from the Meet DOM.
 
 Consequences that shape the whole codebase:
 - One WebSocket per speaker per meeting; never a mixed stream.
@@ -26,37 +26,83 @@ Consequences that shape the whole codebase:
 
 ### Architectural commitment 2: meetings are graphs, not transcripts
 
-The transcript is raw input; the **knowledge graph is the product**. Notes, summaries, search, action items, and cross-meeting memory are all projections of the same Kuzu graph. Node types: `Meeting`, `Person`, `Topic`, `Decision`, `ActionItem`, `OpenQuestion`, `Entity`, `Utterance`. Schemas in PRD §8.
+The transcript is raw input; the **knowledge graph is the product**. Notes, summaries, search, action items, and cross-meeting memory are all projections of the same graph (stored in Postgres tables `graph_nodes` and `graph_edges`). Node types: `Meeting`, `Person`, `Topic`, `Decision`, `ActionItem`, `OpenQuestion`, `Entity`, `Utterance`. Schemas in PRD §8.
 
 Non-negotiable invariants for the graph builder:
 - **Grounding.** Every `Decision` / `ActionItem` / `OpenQuestion` MUST have a `SOURCE` edge to a real `Utterance` from the window. Reject LLM output that references unknown utterance IDs.
 - **No hallucinated owners.** `ASSIGNED_TO` only when the speech makes ownership explicit.
 - **Idempotent dedup.** Before adding a node, embed its text and check cosine similarity (>0.85) against existing nodes of the same type; merge instead of duplicating.
 - **Lifecycle states.** Nodes are `provisional` → `confirmed` (stable across windows or affirmed in speech) → `superseded` (contradicted later). The UI renders these differently; do not collapse them.
-- **Window cadence.** Aggregator emits a 30-second sliding window every 15 seconds (or earlier if 50 new words arrived). Don't transcribe or extract on every 200ms VAD chunk — that floods the model.
+- **Window cadence.** The aggregator (a TaskIQ task in the worker process) emits a 30-second sliding window every 15 seconds (or earlier if 50 new words arrived). Don't transcribe or extract on every 200ms VAD chunk — that floods the model.
 
-LLM contract for graph extraction is in PRD §9.4. Output is a JSON array of `add_node` / `add_edge` / `update_node` ops, validated through Pydantic before applying transactionally to Kuzu.
+LLM contract for graph extraction is in PRD §9.4. Output is a JSON array of `add_node` / `add_edge` / `update_node` ops, validated through Pydantic before applying transactionally to the `graph_nodes` / `graph_edges` tables.
 
-## Service topology
+## Topology
 
-Single Docker Compose stack (no k8s, no service mesh — production hardening is post-MVP). Inter-service comms is **NATS JetStream** (JSON payloads). Browser↔Gateway is WebSocket. Backend→UI is SSE for live, REST for historical.
+One Python codebase (`tryniq/`), two process entry points:
 
-Services (per PRD §7.2 and §17.2):
+- **`api`** — FastAPI app. REST endpoints for meeting CRUD/history, the WebSocket `/ingest` endpoint that accepts PCM from the extension and streams it into MinIO, an SSE endpoint that bridges Redis pub/sub to the UI, and TaskIQ enqueueing. Async only — no blocking work here.
+- **`worker`** — TaskIQ worker consuming the Redis-backed task queue. Owns all CPU/GPU/LLM-bound work: live ASR (Moonshine), final ASR (faster-whisper), aggregator window emission, graph builder LLM extraction + node dedup + graph writes, speaker ID (ECAPA), utterance embedding for RAG.
 
-| Service                   | Stack                         | Stateful?              |
-|---------------------------|-------------------------------|------------------------|
-| `extension/`              | Chrome MV3 + TS + Vite        | No                     |
-| `services/gateway/`       | FastAPI                       | Writes to MinIO + NATS |
-| `services/asr-live/`      | Moonshine-base                | No                     |
-| `services/asr-final/`     | faster-whisper large-v3       | No                     |
-| `services/aggregator/`    | —                             | Postgres               |
-| `services/graph-builder/` | LLM client                    | Kuzu                   |
-| `services/speaker-id/`    | SpeechBrain ECAPA-TDNN        | Postgres + pgvector    |
-| `ui/`                     | Next.js + Cytoscape + Zustand | No                     |
+Both processes import the same modules. They are NOT separate services with API contracts between them — they are two ways of running the same code.
 
-State stores: **Postgres** (utterances, metadata) + **pgvector** (RAG and topic embeddings) + **Kuzu** (graph) + **MinIO** (audio + exports).
+Cross-process communication:
+- `api → worker`: TaskIQ tasks (`task.kiq(...)`), Redis-backed.
+- `worker → api`: Redis pub/sub on channel `meeting:{id}:events`. The api process forwards to the UI via SSE.
+- Audio: api writes PCM to MinIO; worker reads from MinIO by path. **PCM bytes are never passed as task arguments — only object paths and IDs.**
 
-NATS subjects (PRD §9.2): `audio.{meeting}.{stream}`, `transcript.{meeting}`, `timeline.{meeting}.window`, `graph.{meeting}.patch`, `meeting.lifecycle`.
+Infra containers (not our code):
+
+| Container | Role |
+|---|---|
+| Postgres + pgvector | Meetings, utterances, graph nodes & edges, embeddings, speaker profiles |
+| MinIO | Per-speaker WAV files; exports |
+| Redis | TaskIQ broker AND pub/sub for UI events |
+| Ollama (optional) | Local LLM for graph extraction |
+| ui (Next.js) | Frontend, separate package |
+
+State stores: **Postgres** (utterances, metadata, graph nodes/edges) + **pgvector** (RAG and topic embeddings) + **MinIO** (audio + exports). Redis is treated as ephemeral.
+
+The graph lives in Postgres in two tables (PRD §8): `graph_nodes(id, meeting_id, type, fields jsonb, status, created_at)` and `graph_edges(id, meeting_id, type, from_id, to_id, created_at)`.
+
+## Where to find what
+
+- `src/tryniq/api/` — FastAPI app, REST endpoints, WS handlers, SSE.
+- `src/tryniq/tasks/` — TaskIQ task definitions (`broker = ...`, `@broker.task` functions).
+- `src/tryniq/pipeline/` — `asr_live`, `asr_final`, `aggregator`, `graph_builder`, `speaker_id`. Pure modules called from tasks.
+- `src/tryniq/storage/` — `pg.py`, `minio.py`, `redis.py` clients.
+- `src/tryniq/llm/` — provider abstraction (Anthropic / Ollama / vLLM).
+- `src/tryniq/models/` — Pydantic schemas (WS init, lifecycle, graph ops).
+- `src/tryniq/config.py` — pydantic-settings, all from env.
+- `extension/src/` — Chrome MV3 extension (TS).
+- `ui/` — Next.js frontend, separate package.
+- `infra/postgres/init.sql` — schema bootstrap.
+
+## How to add a new background task
+
+1. Define the task in `src/tryniq/tasks/` against the shared broker:
+
+   ```python
+   from tryniq.tasks import broker
+   from tryniq.pipeline import asr_final
+
+   @broker.task
+   async def transcribe_final(meeting_id: str, stream_id: str, object_key: str) -> None:
+       # worker reads audio from MinIO using object_key, writes results to Postgres,
+       # then publishes a Redis pub/sub event on meeting:{meeting_id}:events
+       await asr_final.run(meeting_id, stream_id, object_key)
+   ```
+
+2. Enqueue from an API endpoint or another task:
+
+   ```python
+   from tryniq.tasks.transcribe import transcribe_final
+   await transcribe_final.kiq(meeting_id, stream_id, object_key)
+   ```
+
+3. **Never pass large binary data through task arguments.** Pass object keys / row IDs and have the worker read from MinIO or Postgres. Tasks must be idempotent — TaskIQ retries on failure.
+
+4. To push UI updates from a task, publish to Redis: `await redis.publish(f"meeting:{meeting_id}:events", json.dumps(payload))`. The api's SSE endpoint forwards subscribers automatically.
 
 ## Model defaults
 
@@ -83,6 +129,7 @@ From PRD §13, the ones that change how you should write code:
 - **R2 — Brittle Meet DOM selectors.** Prefer ARIA roles and stable `data-*` attributes over CSS classes. Always keep a "Speaker N" fallback labeling path with manual rename.
 - **R3 — Malformed LLM output.** Pydantic-validate every response, reject unknown utterance IDs, retry once, then skip the window — never corrupt graph state.
 - **R8 — Local-mic echo.** The local user's track is flagged `is_local_user: true`; detect and de-duplicate against remote echo.
+- **Worker process crashes mid-task.** TaskIQ retries on the Redis broker; design tasks to be idempotent (check before insert, use stable IDs).
 
 ## When in doubt
 

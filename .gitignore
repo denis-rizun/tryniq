@@ -14,9 +14,9 @@ Desktop.ini
 .classpath
 .settings/
 
-.env
-.env.*
-!.env.example
+backend/.env
+backend/.env.example
+!backend/.env.example
 *.pem
 *.key
 secrets/
@@ -124,9 +124,11 @@ kuzu-data/
 *.m4a
 *.ogg
 *.opus
+!tests/fixtures/**/*.wav
 
 models/
 *.onnx
+!extension/vendor/silero_vad.onnx
 *.pt
 *.pth
 *.bin
