@@ -1,0 +1,27 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; font-size: 13px; width: 320px; color: #1a1a1a; }
+#root { padding: 12px; }
+.header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: #9aa0a6; flex: none; }
+.dot.green { background: #34a853; }
+.dot.red { background: #ea4335; }
+.dot.amber { background: #fbbc04; }
+.title { font-weight: 600; font-size: 14px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
+button.primary { background: #1a73e8; color: white; border: 0; border-radius: 6px; padding: 8px 12px; font-weight: 600; cursor: pointer; flex: 1; }
+button.primary[disabled] { background: #c4d0e8; cursor: not-allowed; }
+button.primary.stop { background: #ea4335; }
+.muted { color: #5f6368; font-size: 12px; }
+.list { margin: 8px 0; border: 1px solid #e8eaed; border-radius: 6px; }
+.list .item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid #f1f3f4; }
+.list .item:last-child { border-bottom: 0; }
+.name { flex: 1; }
+.badge { font-size: 10px; background: #e8eaed; padding: 1px 6px; border-radius: 10px; color: #5f6368; }
+.badge.you { background: #fef7e0; color: #b06000; }
+.badge.active { background: #e6f4ea; color: #137333; }
+.iconbtn { background: transparent; border: 0; cursor: pointer; padding: 2px 6px; color: #5f6368; }
+input[type="text"] { width: 100%; padding: 6px 8px; border: 1px solid #dadce0; border-radius: 4px; font: inherit; }
+details { margin-top: 8px; }
+summary { cursor: pointer; color: #5f6368; }
+.error { color: #ea4335; font-size: 12px; }
