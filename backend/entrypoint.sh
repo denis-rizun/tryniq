@@ -8,6 +8,9 @@ case "$1" in
   migrate)
     exec alembic upgrade head
     ;;
+  worker)
+    exec taskiq worker app.tasks:broker
+    ;;
   *)
     exec "$@"
     ;;

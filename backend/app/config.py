@@ -5,6 +5,7 @@ from typing import Literal, Self
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.asr.config import ASRSettings
 from app.core.config import BASE_MODEL_CONFIG
 from app.ingest.config import MinioSettings
 
@@ -54,6 +55,12 @@ class DatabaseSettings(BaseSettings):
         )
 
 
+class RedisSettings(BaseSettings):
+    model_config = SettingsConfigDict(**BASE_MODEL_CONFIG, env_prefix="REDIS_")
+
+    URL: str = "redis://redis:6379/0"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(**BASE_MODEL_CONFIG)
 
@@ -62,6 +69,8 @@ class Settings(BaseSettings):
     logging: LoggerSettings = Field(default_factory=LoggerSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     minio: MinioSettings = Field(default_factory=MinioSettings)
+    redis: RedisSettings = Field(default_factory=RedisSettings)
+    asr: ASRSettings = Field(default_factory=ASRSettings)
 
     @classmethod
     @lru_cache

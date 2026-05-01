@@ -65,8 +65,42 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "${API_PORT}:${API_PORT}"
+
+  worker:
+    <<: [*common]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["worker"]
+    logging: *default-logging
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - whisper-models:/home/appuser/.cache
+
+  redis:
+    image: redis:7-alpine
+    <<: *common
+    logging: *default-logging
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "redis-cli", "ping"]
+    volumes:
+      - redis-data:/data
+    expose:
+      - "6379"
 
   minio:
     image: minio/minio:latest
@@ -92,6 +126,7 @@ volumes:
   redis-data:
   minio-data:
   redis-insight-data:
+  whisper-models:
 
 
 networks:

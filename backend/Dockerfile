@@ -46,7 +46,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid 1000 appgroup \
-    && useradd --uid 1000 --gid appgroup --shell /bin/bash --create-home appuser
+    && useradd --uid 1000 --gid appgroup --shell /bin/bash --create-home appuser \
+    && install -d -o appuser -g appgroup /home/appuser/.cache /home/appuser/.cache/huggingface
+
+ENV HF_HOME=/home/appuser/.cache/huggingface \
+    HUGGINGFACE_HUB_CACHE=/home/appuser/.cache/huggingface/hub \
+    XDG_CACHE_HOME=/home/appuser/.cache
 
 WORKDIR /app
 
