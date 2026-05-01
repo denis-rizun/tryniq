@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from uuid import UUID
@@ -38,6 +36,12 @@ class MinioClient:
                 Body=body,
                 ContentType=content_type,
             )
+
+    async def get_object(self, key: str) -> bytes:
+        async with self._get_client() as client:
+            response = await client.get_object(Bucket=config.minio.BUCKET, Key=key)
+            async with response["Body"] as stream:
+                return await stream.read()
 
     @staticmethod
     def get_stream_object_key(meeting_id: UUID, stream_id: UUID, part: int = 1) -> str:

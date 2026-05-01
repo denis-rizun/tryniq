@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import json
 from uuid import UUID
@@ -15,14 +13,23 @@ from app.ingest.constants import INIT_VOICE_TIMEOUT
 from app.ingest.schemas import CONTROL_ADAPTER, StreamInitMessage
 from app.ingest.wav_writer import WavWriter
 from app.meeting.models import Meeting
+from app.participant.exceptions import ParticipantNameUnresolvedError
+from app.participant.models import Participant
+from app.participant.service import ParticipantService
 
 logger = structlog.get_logger()
 
 
 class IngestService:
-    def __init__(self, session: AsyncSession, minio_client: MinioClient) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        minio_client: MinioClient,
+        participant_service: ParticipantService,
+    ) -> None:
         self._session = session
         self._minio_client = minio_client
+        self._participant_service = participant_service
 
     async def does_meeting_exist(self, meeting_id: UUID) -> bool:
         result = await self._session.exec(select(Meeting.id).where(Meeting.id == meeting_id))
@@ -40,21 +47,54 @@ class IngestService:
         if first_message is None:
             return
 
-        speaker_name = first_message.speaker.display_name or "(unnamed)"
-        if not first_message.speaker.display_name:
-            logger.warning("Speaker display name is empty in init payload", stream_id=stream_id)
+        speaker = first_message.speaker
+        participant = await self._try_create_participant(
+            meeting_id=meeting_id,
+            stream_id=stream_id,
+            display_name=speaker.display_name,
+            is_local_user=speaker.is_local_user,
+        )
 
         writer = await self.open_writer(meeting_id, stream_id)
         logger.debug(
             "Audio stream started",
             meeting_id=meeting_id,
             stream_id=stream_id,
-            speaker=speaker_name,
-            is_local_user=first_message.speaker.is_local_user,
+            speaker=speaker.display_name or "(unresolved)",
+            is_local_user=speaker.is_local_user,
             object_key=writer.key,
+            has_participant=participant is not None,
         )
 
-        await self._consume_stream(ws, writer, meeting_id, stream_id, speaker_name)
+        await self._consume_stream(
+            ws=ws,
+            writer=writer,
+            meeting_id=meeting_id,
+            stream_id=stream_id,
+            is_local_user=speaker.is_local_user,
+            participant=participant,
+        )
+
+    async def _try_create_participant(
+        self,
+        meeting_id: UUID,
+        stream_id: UUID,
+        display_name: str,
+        is_local_user: bool,
+    ) -> Participant | None:
+        try:
+            return await self._participant_service.create(
+                meeting_id=meeting_id,
+                stream_id=stream_id,
+                display_name=display_name,
+                is_local_user=is_local_user,
+            )
+        except ParticipantNameUnresolvedError:
+            logger.debug(
+                "Participant deferred — name unresolved at init; awaiting speaker_renamed",
+                stream_id=stream_id,
+            )
+            return None
 
     async def _validate_connection(self, ws: WebSocket, meeting_id: UUID, stream_id: UUID) -> StreamInitMessage | None:
         try:
@@ -100,7 +140,8 @@ class IngestService:
         writer: WavWriter,
         meeting_id: UUID,
         stream_id: UUID,
-        speaker_name: str,
+        is_local_user: bool,
+        participant: Participant | None,
     ) -> None:
         discarded = False
         discard_reason: str | None = None
@@ -130,11 +171,18 @@ class IngestService:
                 logger.debug(
                     "Received a control message",
                     stream_id=stream_id,
-                    speaker=speaker_name,
+                    participant_id=participant.id if participant else None,
                     message=control_message.model_dump(),
                 )
+
                 if control_message.type == "speaker_renamed":
-                    speaker_name = control_message.new_name or speaker_name
+                    participant = await self._handle_rename(
+                        participant=participant,
+                        meeting_id=meeting_id,
+                        stream_id=stream_id,
+                        new_name=control_message.new_name,
+                        is_local_user=is_local_user,
+                    )
 
                 elif control_message.type == "discard":
                     discarded = True
@@ -147,26 +195,45 @@ class IngestService:
         except WebSocketDisconnect:
             pass
         finally:
-            await self._finalise(writer, meeting_id, stream_id, speaker_name, discarded, discard_reason)
+            await self._finalise(writer, stream_id, participant, discarded, discard_reason)
             await ws.close()
+
+    async def _handle_rename(
+        self,
+        participant: Participant | None,
+        meeting_id: UUID,
+        stream_id: UUID,
+        new_name: str,
+        is_local_user: bool,
+    ) -> Participant | None:
+        if not new_name:
+            return participant
+        try:
+            return await self._participant_service.create(
+                meeting_id=meeting_id,
+                stream_id=stream_id,
+                display_name=new_name,
+                is_local_user=is_local_user,
+            )
+        except ParticipantNameUnresolvedError:
+            return participant
 
     @classmethod
     async def _finalise(
         cls,
         writer: WavWriter,
-        meeting_id: UUID,
         stream_id: UUID,
-        speaker_name: str,
+        participant: Participant | None,
         discarded: bool,
         discard_reason: str | None,
     ) -> None:
+        participant_id = participant.id if participant else None
         if discarded:
             writer.abort()
             logger.debug(
                 "Audio stream discarded by the client",
-                meeting_id=meeting_id,
                 stream_id=stream_id,
-                speaker=speaker_name,
+                participant_id=participant_id,
                 reason=discard_reason,
             )
             return
@@ -174,9 +241,8 @@ class IngestService:
         audio_byte_count = await writer.close()
         logger.debug(
             "Audio stream ended and persisted",
-            meeting_id=meeting_id,
             stream_id=stream_id,
-            speaker=speaker_name,
+            participant_id=participant_id,
             audio_byte_count=audio_byte_count,
             duration_seconds=round(writer.duration_seconds, 2),
             object_key=writer.key,
