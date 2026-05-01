@@ -75,6 +75,10 @@ export const attachTrack = async (args: AttachTrackArgs): Promise<void> => {
   const streamId = crypto.randomUUID();
   const audioContext = new AudioContext({ sampleRate: NATIVE_SAMPLE_RATE });
   await ensureWorkletModule(audioContext, workletUrl);
+  if (audioContext.state === "suspended") {
+    try { await audioContext.resume(); } catch (error) { console.warn("[tryniq] audioContext.resume failed", error); }
+  }
+  console.log("[tryniq] attachTrack", { streamId, trackId: track.id, ctxState: audioContext.state, isLocal });
 
   const sourceNode = audioContext.createMediaStreamSource(new MediaStream([track]));
   const workletNode = new AudioWorkletNode(audioContext, WORKLET_PROCESSOR_NAME, {
@@ -83,6 +87,10 @@ export const attachTrack = async (args: AttachTrackArgs): Promise<void> => {
     channelCount: 1,
   });
   sourceNode.connect(workletNode);
+  const keepAliveGain = audioContext.createGain();
+  keepAliveGain.gain.value = 0;
+  sourceNode.connect(keepAliveGain);
+  keepAliveGain.connect(audioContext.destination);
 
   workletNode.port.onmessage = (event: MessageEvent) => {
     const data = event.data;
