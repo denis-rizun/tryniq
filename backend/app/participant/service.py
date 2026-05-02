@@ -5,6 +5,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.ingest.constants import UNRESOLVED_NAME_RE
+from app.meeting.models import Meeting
 from app.participant.exceptions import ParticipantNameUnresolvedError
 from app.participant.models import Participant
 
@@ -13,7 +14,7 @@ logger = structlog.get_logger()
 
 class ParticipantService:
     def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+        self.session = session
 
     async def create(
         self,
@@ -29,7 +30,7 @@ class ParticipantService:
         query = (
             select(Participant).where(Participant.meeting_id == meeting_id).where(Participant.stream_id == stream_id)
         )
-        found = (await self._session.exec(query)).one_or_none()
+        found = (await self.session.exec(query)).one_or_none()
 
         if found:
             return await self.update(found, resolved_name)
@@ -43,6 +44,11 @@ class ParticipantService:
         await self._save(participant)
         logger.debug("participant is created", id=participant.id)
         return participant
+
+    async def list(self, meeting: Meeting) -> list[Participant]:
+        query = select(Participant).where(Participant.meeting_id == meeting.id)
+        result = await self.session.exec(query)
+        return list(result.all())
 
     async def update(self, instance: Participant, name: str) -> Participant:
         if instance.name != name:
@@ -59,7 +65,7 @@ class ParticipantService:
         return None if is_unresolved else name
 
     async def _save(self, instance: Participant) -> Participant:
-        self._session.add(instance)
-        await self._session.commit()
-        await self._session.refresh(instance)
+        self.session.add(instance)
+        await self.session.commit()
+        await self.session.refresh(instance)
         return instance
