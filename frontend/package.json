@@ -14,11 +14,13 @@
     "ci": "biome ci . && tsc --noEmit"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.90.21",
     "clsx": "^2.1.1",
     "lucide-react": "^0.577.0",
     "next": "16.2.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "sonner": "^2.0.7",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
