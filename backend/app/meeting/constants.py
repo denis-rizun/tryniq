@@ -10,3 +10,24 @@ class MeetingStatus(StrEnum):
 
 
 MEET_CODE_RE = re.compile(r"([a-z]{3}-[a-z]{4}-[a-z]{3})")
+GLOBAL_LIFECYCLE_CHANNEL = "meetings:lifecycle"
+EVENT_CHANNEL = "meeting:{meeting_id}:events"
+PARTIAL_KEY = "live:partial:{stream_id}"
+PARTIAL_TTL_SECONDS = 60
+HEARTBEAT_INTERVAL_SECONDS = 15.0
+
+
+class LifecycleEvent(StrEnum):
+    STARTED = "started"
+    ENDED = "ended"
+    FINALIZING = "finalizing"
+    FINAL = "final"
+
+
+GLOBAL_LIFECYCLE_EVENTS = frozenset({LifecycleEvent.STARTED, LifecycleEvent.ENDED, LifecycleEvent.FINAL})
+
+
+class MeetingEventKind(StrEnum):
+    MEETING_LIFECYCLE = "meeting_lifecycle"
+    PARTIAL_TRANSCRIPT = "partial_transcript"
+    TRANSCRIPT_SEGMENT = "transcript_segment"
