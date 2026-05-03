@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.asr.config import ASRSettings
 from app.core.config import BASE_MODEL_CONFIG
+from app.graph.config import GraphSettings
 from app.ingest.config import MinioSettings
 from app.meeting.config import RedisSettings
 
@@ -66,6 +67,7 @@ class Settings(BaseSettings):
     minio: MinioSettings = Field(default_factory=MinioSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
     asr: ASRSettings = Field(default_factory=ASRSettings)
+    graph: GraphSettings = Field(default_factory=GraphSettings)
 
     @classmethod
     @lru_cache
