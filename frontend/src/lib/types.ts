@@ -66,7 +66,7 @@ export interface Meeting {
   duration?: string | null;
   durationLive?: string | null;
   participants: string[];
-  state: 'live' | 'final';
+  state: 'live' | 'finalizing' | 'final';
   asrModel: string;
   llmModel: string;
   utterances: Utterance[];
@@ -83,7 +83,7 @@ export interface MeetingListItem {
   id: string;
   title: string;
   participants: string[];
-  state: 'live' | 'final';
+  state: 'live' | 'finalizing' | 'final';
   duration?: string | null;
   durationLive?: string | null;
   startedAt: string;
