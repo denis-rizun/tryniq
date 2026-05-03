@@ -35,32 +35,18 @@ services:
     ports:
       - "${POSTGRES_PORT}:${POSTGRES_PORT}"
 
-  migration:
-    <<: [*common]
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: ["migrate"]
-    restart: "no"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ./alembic:/app/alembic:rw
-
   api:
     <<: [*common]
+    image: tryniq-backend:dev
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        API_PORT: ${API_PORT}
     logging: *default-logging
     expose:
       - "${API_PORT}"
     depends_on:
-      migration:
-        condition: service_completed_successfully
+#      migration:
+#        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       minio:
@@ -70,16 +56,25 @@ services:
     ports:
       - "${API_PORT}:${API_PORT}"
 
+  migration:
+    <<: [*common]
+    image: tryniq-backend:dev
+    command: ["migrate"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./alembic:/app/alembic:rw
+
   worker:
     <<: [*common]
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: tryniq-backend:dev
     command: ["worker"]
     logging: *default-logging
     depends_on:
-      migration:
-        condition: service_completed_successfully
+#      migration:
+#        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       minio:
@@ -101,6 +96,18 @@ services:
       - redis-data:/data
     expose:
       - "6379"
+
+  redis-insight:
+    image: redis/redisinsight:latest
+    <<: *common
+    logging: *default-logging
+    ports:
+      - "5540:5540"
+    volumes:
+      - redis_insight_data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
 
   minio:
     image: minio/minio:latest
@@ -124,6 +131,7 @@ services:
 volumes:
   postgres-tryniq-data:
   redis-data:
+  redis_insight_data:
   minio-data:
   redis-insight-data:
   whisper-models:

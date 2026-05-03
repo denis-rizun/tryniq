@@ -24,6 +24,7 @@ dependencies = [
     "types-aiobotocore-s3>=3.5.0",
     "faster-whisper>=1.0.3",
     "numpy>=1.26",
+    "onnxruntime>=1.20",
 ]
 
 [project.optional-dependencies]
