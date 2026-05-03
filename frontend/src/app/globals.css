@@ -1107,6 +1107,22 @@ textarea {
   align-items: center;
   gap: 12px;
 }
+.scrubber-play {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  background: var(--color-paper-lift);
+  border: 1px solid var(--color-border);
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+}
+.scrubber-play:hover {
+  background: var(--color-paper-hover);
+  color: var(--color-ink);
+}
 .scrubber-track {
   flex: 1;
   height: 4px;

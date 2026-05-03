@@ -15,6 +15,8 @@ import {
   Mic,
   MoreHorizontal,
   Network,
+  Pause,
+  Play,
   Plus,
   RotateCcw,
   Search,
@@ -25,6 +27,7 @@ import {
   Upload,
   Users,
   Video,
+  Wand2,
   X,
   ZoomIn,
   ZoomOut,
@@ -59,6 +62,9 @@ const REGISTRY = {
   message: MessageSquare,
   meeting: Video,
   settings: SettingsIcon,
+  play: Play,
+  pause: Pause,
+  tidy: Wand2,
 } as const satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof REGISTRY;
