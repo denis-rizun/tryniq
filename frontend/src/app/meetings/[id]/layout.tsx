@@ -11,7 +11,7 @@ const MeetingLayout = async ({ children, params }: LayoutProps) => {
   const { id } = await params;
   return (
     <>
-      <MeetingHeader />
+      <MeetingHeader meetingId={id} />
       <MeetingTabs meetingId={id} />
       {children}
     </>

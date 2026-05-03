@@ -1,35 +1,40 @@
 'use client';
 
-import { NotesPanel } from '@/components/meeting/notes/notes-panel';
-import { TranscriptPanel } from '@/components/meeting/transcript/transcript-panel';
-import { useLiveTranscript } from '@/lib/hooks/use-live-transcript';
-import { meeting, people } from '@/lib/mock';
+import { useQuery } from '@tanstack/react-query';
+import { use } from 'react';
+import { toMeeting } from '@/lib/api/adapters';
+import { getTranscript, listMeetings } from '@/lib/api/meetings';
+import { OverviewClient } from './overview-client';
 
-const OverviewPage = () => {
-  const live = useLiveTranscript(meeting, true);
+interface Props {
+  params: Promise<{ id: string }>;
+}
+
+const OverviewPage = ({ params }: Props) => {
+  const { id } = use(params);
+
+  const transcriptQuery = useQuery({
+    queryKey: ['transcript', id],
+    queryFn: () => getTranscript(id),
+  });
+  const meetingsQuery = useQuery({
+    queryKey: ['meetings'],
+    queryFn: listMeetings,
+  });
+
+  if (transcriptQuery.isLoading) {
+    return <div className="empty">Loading…</div>;
+  }
+  if (transcriptQuery.isError || !transcriptQuery.data) {
+    return <div className="empty">Could not load meeting transcript.</div>;
+  }
+
+  const title =
+    meetingsQuery.data?.find((m) => m.id === id)?.title ?? 'Untitled meeting';
+  const { meeting, people, participantSlugById } = toMeeting(transcriptQuery.data, title);
+
   return (
-    <div className="overview">
-      <TranscriptPanel
-        meeting={meeting}
-        people={people}
-        isLive={true}
-        activeSpeakerId={live.activeSpeakerId}
-        currentUtterance={live.currentUtt}
-        animatedUtterance={live.animatedUtt}
-        flashId={live.flashId}
-        outlinedId={live.outlinedId}
-        onClickUtterance={live.onClickUtterance}
-        onHoverUtterance={live.setHoveredUttId}
-      />
-      <NotesPanel
-        meeting={meeting}
-        people={people}
-        onCiteClick={live.onCiteClick}
-        flashNoteId={live.flashNoteId}
-        hoveredUtteranceId={live.hoveredUttId}
-        onHoverNote={live.setOutlinedId}
-      />
-    </div>
+    <OverviewClient meeting={meeting} people={people} participantSlugById={participantSlugById} />
   );
 };
 
