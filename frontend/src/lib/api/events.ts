@@ -7,7 +7,12 @@ export interface SubscribeOptions {
   onError?: (err: Event) => void;
 }
 
-const MEETING_EVENT_KINDS = ['meeting_lifecycle', 'partial_transcript', 'transcript_segment'] as const;
+const MEETING_EVENT_KINDS = [
+  'meeting_lifecycle',
+  'partial_transcript',
+  'transcript_segment',
+  'graph_patch',
+] as const;
 
 export const subscribeMeetingEvents = (
   meetingId: string,

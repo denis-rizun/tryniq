@@ -1,5 +1,5 @@
 import { apiGet, apiPatch } from './client';
-import type { MeetingResponse, TranscriptResponse } from './types';
+import type { GraphResponse, MeetingResponse, TranscriptResponse } from './types';
 
 export const listMeetings = () => apiGet<MeetingResponse[]>('/meetings');
 
@@ -8,3 +8,5 @@ export const getTranscript = (id: string) =>
 
 export const renameMeeting = (id: string, title: string) =>
   apiPatch<MeetingResponse>(`/meetings/${id}`, { title });
+
+export const getMeetingGraph = (id: string) => apiGet<GraphResponse>(`/meetings/${id}/graph`);

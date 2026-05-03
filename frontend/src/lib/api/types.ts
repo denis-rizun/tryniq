@@ -69,10 +69,66 @@ export interface TranscriptSegmentEvent {
   timestamp: string;
 }
 
+export type GraphNodeType =
+  | 'Meeting'
+  | 'Person'
+  | 'Topic'
+  | 'Decision'
+  | 'ActionItem'
+  | 'OpenQuestion'
+  | 'Entity'
+  | 'Utterance';
+
+export type GraphNodeStatusBackend = 'provisional' | 'confirmed' | 'superseded';
+
+export type GraphEdgeType =
+  | 'PARTICIPATED_IN'
+  | 'DISCUSSED_IN'
+  | 'MADE_DECISION'
+  | 'ASSIGNED_TO'
+  | 'BLOCKS'
+  | 'ABOUT_TOPIC'
+  | 'MENTIONS'
+  | 'SOURCE'
+  | 'RELATES_TO';
+
+export interface GraphNodeRead {
+  id: string;
+  meeting_id: string;
+  type: GraphNodeType;
+  fields: Record<string, unknown>;
+  status: GraphNodeStatusBackend;
+  created_at: string;
+}
+
+export interface GraphEdgeRead {
+  id: string;
+  meeting_id: string;
+  type: GraphEdgeType;
+  from_id: string;
+  to_id: string;
+  created_at: string;
+}
+
+export interface GraphResponse {
+  nodes: GraphNodeRead[];
+  edges: GraphEdgeRead[];
+}
+
+export interface GraphPatchEvent {
+  kind: 'graph_patch';
+  meeting_id: string;
+  added_nodes: GraphNodeRead[];
+  added_edges: GraphEdgeRead[];
+  updated_nodes: GraphNodeRead[];
+  timestamp: string;
+}
+
 export type LiveEvent =
   | MeetingLifecycleEvent
   | PartialTranscriptEvent
-  | TranscriptSegmentEvent;
+  | TranscriptSegmentEvent
+  | GraphPatchEvent;
 
 export interface PingEvent {
   kind: 'ping';
