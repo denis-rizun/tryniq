@@ -4,11 +4,11 @@
 
 | Field                 | Value                                              |
 |-----------------------|----------------------------------------------------|
-| **Document version**  | 1.0                                                |
-| **Status**            | Draft for hackathon kickoff                        |
-| **Last updated**      | 2026-04-30                                         |
+| **Document version**  | 1.1                                                |
+| **Status**            | In flight — Phases 1–2 done; Phase 3 next          |
+| **Last updated**      | 2026-05-03                                         |
 | **Target demo date**  | 2026-05-11, 16:00                                  |
-| **Project codename**  | Tryniq                                            |
+| **Project codename**  | Tryniq                                             |
 | **Document owner**    | Engineering team                                   |
 | **Related challenge** | Open Voice Notetaker Challenge — tl;dv replacement |
 
@@ -44,7 +44,7 @@ Tryniq is an open-source meeting intelligence platform designed to replace tl;dv
 
 **Second, Tryniq models a meeting as a live knowledge graph rather than as a transcript.** Speakers, topics, decisions, action items, open questions, and entities become nodes connected by typed edges. The transcript is the raw input; the graph is the product. Notes, summaries, search, action items, and cross-meeting memory are all projections of the same graph. This makes Tryniq a foundation for an organizational knowledge graph fed by meetings, rather than a single-meeting summarization tool.
 
-The MVP delivers a working Chrome extension for Google Meet, an end-to-end pipeline for live and post-meeting transcription using Moonshine and faster-whisper, a real-time graph builder powered by structured-output LLM extraction, a web UI with synchronized transcript and graph visualization, cross-meeting speaker memory via ECAPA-TDNN embeddings, topic linking between meetings, retrieval-augmented question answering over completed meetings, and full export to Markdown.
+The MVP delivers a working Chrome extension for Google Meet, an end-to-end pipeline for live transcription (Parakeet-TDT v2 via `fluid_audio` running in a standalone Swift streamer process on Apple Silicon) and post-meeting refinement (faster-whisper large-v3-turbo in the Python worker), a real-time graph builder powered by structured-output LLM extraction, a web UI with synchronized transcript and graph visualization, cross-meeting speaker memory via ECAPA-TDNN embeddings, topic linking between meetings, retrieval-augmented question answering over completed meetings, and full export to Markdown.
 
 Everything is open-source and self-hostable. The only optional cloud dependency is the LLM for graph extraction, which can be swapped for a local Qwen 2.5 model.
 
@@ -202,19 +202,20 @@ This section enumerates every feature in the MVP, with detailed behavior, accept
 
 ### 6.2 F2 — Live transcription
 
-**Description.** A streaming ASR pipeline (running as a TaskIQ task in the worker process) transcribes incoming audio per-speaker with low latency, producing transcript segments visible in the UI within 1–3 seconds of speech.
+**Description.** A streaming ASR pipeline transcribes incoming audio per-speaker with low latency, producing transcript segments visible in the UI within 1–3 seconds of speech. Live ASR runs in a **separate Swift "streamer" process** rather than in the Python worker.
 
 **Behavior.**
-- The api process accumulates PCM frames per stream into MinIO and enqueues a `transcribe_live(meeting_id, stream_id, object_key, t_start, t_end)` task at each VAD speech-end (or every 3 s of continuous speech).
-- The worker reads the audio segment from MinIO, transcribes it, and writes utterances to Postgres. We do not transcribe every 200ms chunk — that floods the model.
-- Moonshine-base (or Moonshine-tiny on CPU-constrained environments) is the live model.
-- Each transcript segment is published with `is_final: false`, indicating it may be revised by the post-meeting pass.
-- Segments include word-level timestamps where the model supports them.
+- A Swift streamer instance connects to the api at `WS /asr/sessions?token=...` (auth via `ASR_LIVE_AUTH_TOKEN`) and registers with a capacity. Multiple streamer instances may register; the api assigns each new per-speaker stream to the worker with the lowest current load (`LiveASRClient.assign_stream`).
+- The api ingest WebSocket buffers PCM to MinIO via `WavWriter` and *also* forwards every ~200 ms PCM frame to the assigned streamer over the streamer's `/asr/sessions` socket. Frames carry a binary header `(stream_idx, seq) + PCM` (`app/asr/constants.AUDIO_FRAME_HEADER_FMT`). PCM never goes through TaskIQ or Redis.
+- The streamer runs Parakeet-TDT v2 via the `fluid_audio` Swift package (CoreML on Apple Silicon). Per-stream it emits two JSON events back over the same WebSocket: `partial_transcript` (low-cadence hypotheses) and `transcript_segment` (committed segments).
+- The api receives those events, persists committed segments to Postgres `utterances` with `is_final=false` (final ASR will overwrite later), and republishes on the meeting's pub/sub channel `meeting:{meeting_id}:events`. Partials are pub/sub-only and additionally cached at `live:partial:{stream_id}` with TTL so late-joining SSE subscribers see the most recent hypothesis.
+- On stream finalize the api sends a `stream_close` event to the streamer; on streamer disconnect, all assigned streams are torn down. WAV capture continues and `transcribe_final` recovers the transcript after meeting end.
 
 **Acceptance criteria.**
-- End-to-end latency from speech to UI display is under 3 seconds at the 95th percentile on a developer laptop.
-- Word error rate on a clean English test recording is under 12% with Moonshine-base.
-- Multiple speakers transcribed in parallel without interference.
+- End-to-end latency from speech to UI display is under 3 seconds at the 95th percentile on a developer laptop with one connected Swift streamer.
+- Word error rate on a clean English test recording is under 12% with Parakeet-TDT v2.
+- Multiple speakers transcribed in parallel without interference (multiple streams assigned across one or more streamers).
+- If no streamer is connected, the meeting still records cleanly to MinIO and `transcribe_final` produces a transcript post-meeting; only the live transcript is missing.
 
 **Dependencies.** F1.
 
@@ -490,11 +491,11 @@ This section enumerates every feature in the MVP, with detailed behavior, accept
 **Description.** A written, evidence-based comparison of ASR models, included in the demo deliverables, addressing the challenge brief's explicit requirement.
 
 **Behavior.**
-- Three ASR models are evaluated: Moonshine-base, faster-whisper large-v3, NVIDIA Parakeet-TDT-0.6B.
+- Three ASR models are evaluated: Moonshine base (ONNX, streaming), faster-whisper large-v3, NVIDIA Parakeet-TDT-0.6B.
 - Each is run on at least three shared test recordings (clean English, noisy English, multi-speaker English).
 - Metrics reported: word error rate, real-time factor, peak memory, GPU vs CPU viability.
 - A model card (Markdown table) is included in the deliverables, answering the questions enumerated in the challenge brief.
-- Reasoning for the final selection (Moonshine for live, faster-whisper for final) is documented.
+- Reasoning for the final selection (Moonshine base (ONNX, streaming) for live, faster-whisper for final) is documented.
 
 **Acceptance criteria.**
 - All three models successfully transcribe the test recordings.
@@ -507,25 +508,25 @@ This section enumerates every feature in the MVP, with detailed behavior, accept
 
 ## 7. System architecture
 
-The backend is **one Python codebase** (`tryniq/`) run as **two processes** — `api` and `worker` — backed by three infrastructure containers (Postgres, MinIO, Redis). Both processes import the same modules; they are not separate services with API contracts between them, just two ways of running the same code.
+The system has **three processes**: a Python `api` and `worker` (one codebase in `backend/app/`, two `entrypoint.sh` commands; same Docker image), and a separate Swift `streamer` (in `streamer/`) that runs live ASR natively on Apple Silicon. The `api` and `worker` import the same modules — they are not separate services with API contracts between them, just two ways of running the same code. The streamer talks to the api over a single WebSocket (`/asr/sessions`) using the schemas in `app/asr/schemas.py`. Three infrastructure containers (Postgres + pgvector, MinIO, Redis) round out the stack.
 
 ### 7.1 High-level diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  BROWSER                                                    │
-│  ┌──────────┐  ┌────────────┐  ┌──────────────┐             │
-│  │ Content  │→ │ WebRTC tap │→ │ AudioWorklet │             │
-│  │ script   │  │ (main world)│ │ + Silero VAD│             │
-│  └──────────┘  └────────────┘  └───────┬──────┘             │
-│       │                                 │                    │
-│       ▼                                 ▼                    │
-│  ┌──────────────┐               ┌─────────────┐              │
-│  │ DOM observer │               │ WS clients  │              │
-│  │ (names + AS) │               │ (per stream)│              │
-│  └──────────────┘               └──────┬──────┘              │
+│  ┌──────────┐  ┌─────────────┐  ┌──────────────┐            │
+│  │ Content  │→ │ WebRTC tap  │→ │ AudioWorklet │            │
+│  │ script   │  │ (main world)│  │ + Silero VAD │            │
+│  └──────────┘  └─────────────┘  └───────┬──────┘            │
+│       │                                  │                   │
+│       ▼                                  ▼                   │
+│  ┌──────────────┐                ┌─────────────┐             │
+│  │ DOM observer │                │ WS clients  │             │
+│  │ (names + AS) │                │ (per stream)│             │
+│  └──────────────┘                └──────┬──────┘             │
 └──────────────────────────────────────────┼───────────────────┘
-                                           │ WebSocket(s)
+                                           │ WS /meetings/{id}/streams/{sid}
                                            ▼
 ┌──────────────────────────────────────────────────────────────┐
 │  BACKEND (Docker Compose)                                    │
@@ -533,11 +534,12 @@ The backend is **one Python codebase** (`tryniq/`) run as **two processes** — 
 │   ┌──────────────────────┐                                   │
 │   │  api  (FastAPI)      │  async only                       │
 │   │  - REST              │                                   │
-│   │  - WS /ingest        │──── streams PCM ──▶ MinIO         │
+│   │  - WS ingest         │──── PCM ───▶ MinIO (WavWriter)    │
+│   │  - WS /asr/sessions  │◀── Swift streamer registers       │
 │   │  - SSE /events       │                                   │
+│   │  - WS /events/ws     │                                   │
 │   │  - enqueues tasks    │                                   │
-│   └──┬───────────────┬───┘                                   │
-│      │               ▲                                       │
+│   └──┬───────────────▲───┘                                   │
 │      │ task.kiq()    │ pub/sub                               │
 │      ▼               │ meeting:{id}:events                   │
 │   ┌─────────────────────┐                                    │
@@ -546,12 +548,12 @@ The backend is **one Python codebase** (`tryniq/`) run as **two processes** — 
 │      │ consume       │ publish                               │
 │      ▼               │                                       │
 │   ┌──────────────────┴───┐                                   │
-│   │  worker (TaskIQ)     │  CPU/GPU/LLM-bound work           │
-│   │  - asr_live          │                                   │
-│   │  - asr_final         │  reads PCM ──▶ MinIO              │
-│   │  - aggregator        │                                   │
-│   │  - graph_builder     │  writes ──▶ Postgres              │
-│   │  - speaker_id        │                                   │
+│   │  worker (TaskIQ)     │  post-meeting CPU/GPU/LLM work    │
+│   │  - transcribe_final  │  reads PCM ──▶ MinIO              │
+│   │  - (Phase 3+)        │  writes ──▶ Postgres              │
+│   │    aggregator,       │                                   │
+│   │    graph_builder,    │                                   │
+│   │    speaker_id, …     │                                   │
 │   └──────────────────────┘                                   │
 │                                                              │
 │   ┌──────────────┐  ┌──────────┐  ┌──────────┐               │
@@ -559,15 +561,21 @@ The backend is **one Python codebase** (`tryniq/`) run as **two processes** — 
 │   │  + pgvector  │  │  (audio) │  │ (broker  │               │
 │   │  meetings,   │  │          │  │  + p/sub)│               │
 │   │  utterances, │  │          │  │          │               │
-│   │  graph_nodes,│  │          │  │          │               │
-│   │  graph_edges,│  │          │  │          │               │
+│   │  graph_*,    │  │          │  │          │               │
 │   │  embeddings  │  │          │  │          │               │
 │   └──────────────┘  └──────────┘  └──────────┘               │
 └──────────────────────────────────────────────────────────────┘
-            │ SSE
+            ▲ WS /asr/sessions (PCM out, transcript events in)
+            │
+   ┌────────┴───────────────┐
+   │  streamer (Swift,      │  native macOS, CoreML
+   │  fluid_audio +         │  one process per Mac;
+   │  Parakeet-TDT v2)      │  multiple may register
+   └────────────────────────┘
+            │ SSE / global WS
             ▼
    ┌─────────────────┐
-   │ Web UI (Next.js)│  separate frontend container
+   │ Web UI (Next.js)│  separate frontend
    │ - transcript    │
    │ - graph         │
    │ - notes         │
@@ -579,27 +587,29 @@ The backend is **one Python codebase** (`tryniq/`) run as **two processes** — 
 
 | Process / container | Responsibility | Stateful? |
 |---|---|---|
-| Extension | Capture, VAD, name resolution | No |
-| `api` | WebSocket termination, audio persistence to MinIO, REST, SSE bridge from Redis pub/sub, task enqueueing | No (writes only) |
-| `worker` | Live ASR, final ASR, aggregator window emission, graph builder LLM extraction, speaker ID, embeddings | Writes to Postgres / MinIO |
-| Postgres + pgvector | Meetings, utterances, `graph_nodes`, `graph_edges`, embeddings, speaker profiles | Yes |
+| Extension | Capture, VAD, name resolution, per-stream WS to api | No |
+| `api` | WebSocket termination (ingest + Swift streamer + global events), audio persistence to MinIO, REST, SSE/WS bridge from Redis pub/sub, task enqueueing | No (writes only) |
+| `worker` | Final ASR (Phase 2). Phase 3+: aggregator window emission, graph builder LLM extraction, speaker ID, embeddings | Writes to Postgres / MinIO |
+| `streamer` (Swift) | Live ASR per assigned stream; emits partial/committed events back to api | No (in-memory) |
+| Postgres + pgvector | Meetings, utterances, participants. Phase 3+: `graph_nodes`, `graph_edges`, embeddings, speaker profiles | Yes |
 | MinIO | Per-speaker WAVs and exports | Yes |
 | Redis | TaskIQ broker; pub/sub channel for UI events | Ephemeral |
 | UI (Next.js) | Web frontend | No |
 
-Pipeline modules (`asr_live`, `asr_final`, `aggregator`, `graph_builder`, `speaker_id`) are pure Python modules in `src/tryniq/pipeline/`, called from TaskIQ tasks in `src/tryniq/tasks/`. They are not separate services.
+Backend code is organised by *feature* under `backend/app/<feature>/` (`meeting`, `participant`, `transcript`, `ingest`, `asr`), each with `router.py` / `service.py` / `schemas.py` / `models.py` / `dependencies.py` / `client.py` as needed (see `backend/CONSTITUTION.md`). TaskIQ tasks live next to the feature that owns them (e.g. `app/asr/tasks.py`).
 
 ### 7.3 Communication patterns
 
-- **Browser ↔ api:** WebSocket. One per audio stream. SSE for live UI updates.
+- **Browser ↔ api:** WebSocket `/meetings/{meeting_id}/streams/{stream_id}` per audio stream (binary PCM + JSON control); SSE `/meetings/{id}/events` for live meeting updates; WebSocket `/events/ws` for the global lifecycle stream that powers the directory UI.
+- **api ↔ streamer (Swift):** single WebSocket `/asr/sessions?token=...` per streamer instance. Outbound (api → streamer): JSON `stream_open` / `stream_close` plus binary audio frames `(stream_idx, seq) + PCM`. Inbound (streamer → api): JSON `partial_transcript` / `transcript_segment` / lifecycle. PCM never goes through Redis or TaskIQ.
 - **api → worker:** TaskIQ tasks (`task.kiq(...)`), Redis-backed broker. Tasks receive object keys / row IDs only — never raw PCM.
-- **worker → api:** Redis pub/sub on channel `meeting:{id}:events`. The api process subscribes per active SSE connection and forwards JSON payloads to the UI.
+- **worker → api / streamer → api → UI:** Redis pub/sub on `meeting:{meeting_id}:events`, plus a global lifecycle channel for the directory UI. The api maintains one Redis subscription per active SSE/WS client and forwards JSON payloads.
 - **worker → state:** direct Postgres / MinIO writes.
-- **UI → api:** REST for queries and corrections; SSE for live updates.
+- **UI → api:** REST for queries and corrections; SSE / global WS for live updates.
 
 ### 7.4 Deployment topology (MVP)
 
-Single Docker Compose stack on a developer machine or single server. Three infra containers (Postgres, MinIO, Redis) plus two app containers (`api`, `worker`) built from the same image. Scale workers horizontally by running additional `worker` containers against the same Redis. No Kubernetes, no service mesh, no production infrastructure. Production hardening is post-MVP.
+Three infra containers (Postgres, MinIO, Redis) plus two app containers (`api`, `worker`) built from the same image, all in `backend/compose.yml`. The Swift streamer is **not** containerized — it runs natively on a Mac (CoreML), pointed at the api via env var. Scale workers horizontally by running additional `worker` containers against the same Redis; scale live ASR by starting additional streamer instances (each registers on `/asr/sessions` and the api round-robins by load). No Kubernetes, no service mesh, no production infrastructure. Production hardening is post-MVP.
 
 ---
 
@@ -742,7 +752,7 @@ tryniq-bucket/
 
 ### 9.1 Extension → api WebSocket
 
-**URL:** `wss://api/ingest/{meeting_id}/{stream_id}`
+**URL:** `wss://api/api/v1/meetings/{meeting_id}/streams/{stream_id}`
 
 **Init message** (text frame, must be first):
 ```json
@@ -766,55 +776,67 @@ tryniq-bucket/
 
 **Audio frames:** binary WebSocket frames containing raw PCM int16, ~200ms per frame (3200 samples = 6400 bytes).
 
-**Control messages** (text frames):
+**Control messages** (text frames; see `app/ingest/schemas.py` for canonical schemas):
 ```json
-{ "type": "vad_speech_start", "t": 12.4 }
-{ "type": "vad_speech_end", "t": 15.7 }
-{ "type": "speaker_active", "active": true, "t": 12.4 }
 { "type": "speaker_renamed", "new_name": "Sarah C." }
+{ "type": "discard", "reason": "user_cancelled" }
 { "type": "stream_end" }
 ```
 
+VAD and active-speaker signals are extension-internal in the current implementation — they decide *whether* to send PCM frames; they are not separately reported to the api.
+
 ### 9.2 TaskIQ tasks and Redis channels
 
-There is no message bus. Cross-process communication is (a) TaskIQ tasks for api→worker work dispatch, and (b) Redis pub/sub for worker→api UI events.
+There is no message bus. Cross-process communication is:
+- (a) TaskIQ tasks for api→worker post-meeting work dispatch.
+- (b) The `/asr/sessions` WebSocket for api↔streamer live audio + transcript events.
+- (c) Redis pub/sub for worker/streamer→api→UI events.
 
-**TaskIQ task signatures** (defined in `src/tryniq/tasks/`, all coroutines):
+Live ASR is **not** a TaskIQ task — it runs in the Swift streamer process. There is no `transcribe_live` task.
 
-| Task | Args | Producer | Purpose |
-|---|---|---|---|
-| `transcribe_live` | `(meeting_id, stream_id, object_key, t_start, t_end)` | api (on VAD speech-end) | Stream-to-text with Moonshine; writes `utterances` with `is_final=false` |
-| `transcribe_final` | `(meeting_id, stream_id)` | api (on meeting end) | Whisper large-v3 on the full per-speaker WAV; replaces live segments |
-| `aggregate_window` | `(meeting_id,)` | self-scheduled (every 15 s while live) | Builds 30 s sliding window; enqueues `build_graph` if changed |
-| `build_graph` | `(meeting_id, window_id)` | aggregator | LLM extraction; node dedup; writes `graph_nodes` / `graph_edges` |
-| `compute_speaker_embeddings` | `(meeting_id,)` | api (on meeting end) | ECAPA per speaker; updates `voice_embeddings` |
-| `match_speaker` | `(meeting_id, stream_id)` | api (on new stream) | Nearest-neighbor against historical voice embeddings |
-| `embed_utterances` | `(meeting_id,)` | api (on meeting end) | Populates `utterance_embeddings` for RAG |
-| `rebuild_window` | `(meeting_id, t_start, t_end)` | api (on transcript edit) | Localized graph re-extraction over an edited region |
+**TaskIQ task signatures** (defined in `app/<feature>/tasks.py`, all coroutines):
+
+| Task | Args | Producer | Status | Purpose |
+|---|---|---|---|---|
+| `transcribe_final` | `(meeting_id, stream_id)` | api (on meeting end) | implemented (`app/asr/tasks.py`) | faster-whisper large-v3-turbo on the full per-speaker WAV; replaces live segments |
+| `aggregate_window` | `(meeting_id,)` | self-scheduled (every 15 s while live) | Phase 3 | Builds 30 s sliding window; enqueues `build_graph` if changed |
+| `build_graph` | `(meeting_id, window_id)` | aggregator | Phase 3 | LLM extraction; node dedup; writes `graph_nodes` / `graph_edges` |
+| `compute_speaker_embeddings` | `(meeting_id,)` | api (on meeting end) | Phase 5 | ECAPA per speaker; updates `voice_embeddings` |
+| `match_speaker` | `(meeting_id, stream_id)` | api (on new stream) | Phase 5 | Nearest-neighbor against historical voice embeddings |
+| `embed_utterances` | `(meeting_id,)` | api (on meeting end) | Phase 5 | Populates `utterance_embeddings` for RAG |
+| `rebuild_window` | `(meeting_id, t_start, t_end)` | api (on transcript edit) | Phase 6 | Localized graph re-extraction over an edited region |
 
 All tasks are **idempotent** (use deterministic IDs / upsert semantics) so TaskIQ retries on the Redis broker are safe.
 
-**Redis pub/sub channels** (worker → api → UI via SSE):
+**Redis pub/sub channels** (worker / streamer → api → UI via SSE/WS):
 
 | Channel | Payloads |
 |---|---|
-| `meeting:{meeting_id}:events` | `{ "kind": "transcript_segment", ... }`, `{ "kind": "graph_patch", "ops": [...] }`, `{ "kind": "meeting_lifecycle", "event": "started" \| "ended" }`, `{ "kind": "transcript_finalized" }`, `{ "kind": "speaker_match", ... }` |
+| `meeting:{meeting_id}:events` | `{ "kind": "partial_transcript", ... }`, `{ "kind": "transcript_segment", ... }`, `{ "kind": "meeting_lifecycle", "event": ... }`, plus `graph_patch` / `transcript_finalized` / `speaker_match` (Phase 3+) |
+| Global lifecycle channel | Meeting-level lifecycle events for the directory UI |
 
-The api process maintains one Redis subscription per active SSE client and forwards JSON payloads unchanged. Payload schemas are Pydantic models in `src/tryniq/models/`.
+The api process maintains one Redis subscription per active SSE/WS client and forwards JSON payloads unchanged. Payload schemas are Pydantic models in `app/meeting/schemas.py` (and `app/asr/schemas.py` for streamer-side events).
 
 ### 9.3 REST API
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `GET` | `/api/meetings` | List meetings |
-| `GET` | `/api/meetings/{id}` | Meeting metadata |
-| `GET` | `/api/meetings/{id}/transcript` | Full transcript |
-| `GET` | `/api/meetings/{id}/graph` | Full graph state |
-| `GET` | `/api/meetings/{id}/events` | SSE stream for live updates |
-| `POST` | `/api/meetings/{id}/ask` | Chat with the meeting |
-| `PATCH` | `/api/utterances/{id}` | Edit transcript text |
-| `PATCH` | `/api/persons/{id}` | Rename / link speaker identity |
-| `GET` | `/api/meetings/{id}/export.md` | Markdown export |
+All paths are mounted under root `/api/v1` (set on the FastAPI app). Endpoints marked *Phase 3+* are not yet implemented.
+
+| Method | Endpoint | Status | Purpose |
+|---|---|---|---|
+| `POST` | `/api/v1/meetings` | implemented | Create meeting |
+| `GET` | `/api/v1/meetings` | implemented | List meetings |
+| `PATCH` | `/api/v1/meetings/{id}` | implemented | Update meeting |
+| `GET` | `/api/v1/meetings/{id}/transcript` | implemented | Full transcript |
+| `GET` | `/api/v1/meetings/{id}/participants` | implemented | List participants |
+| `GET` | `/api/v1/meetings/{id}/events` | implemented | SSE stream for live meeting updates |
+| `WS` | `/api/v1/events/ws` | implemented | Global lifecycle WebSocket (directory UI) |
+| `WS` | `/api/v1/meetings/{meeting_id}/streams/{stream_id}` | implemented | Ingest WebSocket (browser → api) |
+| `WS` | `/api/v1/asr/sessions?token=...` | implemented | Swift streamer registration |
+| `GET` | `/api/v1/meetings/{id}/graph` | Phase 3 | Full graph state |
+| `POST` | `/api/v1/meetings/{id}/ask` | Phase 6 | Chat with the meeting |
+| `PATCH` | `/api/v1/utterances/{id}` | Phase 6 | Edit transcript text |
+| `PATCH` | `/api/v1/persons/{id}` | Phase 5 | Rename / link speaker identity |
+| `GET` | `/api/v1/meetings/{id}/export.md` | Phase 5 | Markdown export |
 
 ### 9.4 LLM prompt contract for graph extraction
 
@@ -855,8 +877,8 @@ Response is parsed, validated against a Pydantic schema, and applied transaction
 
 | Role | Model | Rationale |
 |---|---|---|
-| Live ASR | Moonshine-base | Designed for streaming, low latency on short chunks |
-| Final ASR | faster-whisper large-v3 | Best WER, mature ecosystem, CTranslate2-optimized |
+| Live ASR | Parakeet-TDT v2 via `fluid_audio` (Swift) | Runs in the standalone `streamer/` process on Apple Silicon (CoreML). Per-stream low latency, multi-stream parallelism, no Python in the live path. Auth to api via `ASR_LIVE_AUTH_TOKEN`. |
+| Final ASR | faster-whisper large-v3-turbo | Best WER, mature ecosystem, CTranslate2-optimized; runs in the TaskIQ worker. |
 | VAD | Silero VAD (ONNX) | 2 MB, browser-runnable, accurate |
 | Speaker embedding | SpeechBrain ECAPA-TDNN | Standard, robust, fast inference |
 | Graph LLM (default) | Anthropic Claude Haiku 4.5 | Strong structured output, low latency, cheap |
@@ -865,17 +887,17 @@ Response is parsed, validated against a Pydantic schema, and applied transaction
 
 ### 10.2 Comparison plan
 
-For the model card deliverable, three ASR models are benchmarked:
+For the model card deliverable, three ASR options are benchmarked:
 
 | Model | Size | Latency target | WER target | Hardware |
 |---|---|---|---|---|
-| Moonshine-base | 60M | <200ms per 1s | <12% | CPU |
-| faster-whisper large-v3 | 1.5B | <0.3 RTF | <5% | GPU preferred |
-| Parakeet-TDT-0.6B | 600M | <0.1 RTF | <5% | GPU only |
+| Moonshine base (ONNX, streaming) | 60M | <200ms per 1s | <12% | CPU/CoreML |
+| Parakeet-TDT v2 via `fluid_audio` | 600M | <0.1 RTF | <8% | Apple Silicon (CoreML) — selected for live |
+| faster-whisper large-v3-turbo | 1.5B | <0.3 RTF | <5% | GPU preferred — selected for final |
 
 Test set: three recordings (clean, noisy, multi-speaker), each ~5 minutes of English, with hand-curated reference transcripts.
 
-The model card will answer the explicit questions from the challenge brief: which models, why, hardware requirements, local/cloud/hybrid, what worked, what didn't, recommendation for v2.
+The model card will answer the explicit questions from the challenge brief: which models, why, hardware requirements, local/cloud/hybrid, what worked, what didn't, recommendation for v2. In particular it documents *why* Parakeet-TDT v2 in a Swift host beat Moonshine-in-Python for the live path.
 
 ---
 
@@ -971,7 +993,7 @@ These map directly to the challenge rubric:
 | R2 | Meet DOM selectors break during the week | High | Medium | Use ARIA roles and stable `data-*` attributes; maintain Speaker N fallback labeling |
 | R3 | LLM returns malformed JSON or hallucinates non-existent utterance IDs | Medium | Medium | Pydantic validation; reject unknown IDs; retry once; otherwise skip window and continue |
 | R4 | Graph deduplication threshold too aggressive — merges distinct topics | Medium | Medium | Tune threshold on test meetings; allow manual split in UI |
-| R5 | Live ASR latency exceeds 3s on developer hardware | Medium | Medium | Use Moonshine-tiny if needed; reduce window size; ensure GPU available for demo |
+| R5 | Live ASR latency exceeds 3s on developer hardware | Medium | Medium | Run streamer on Apple Silicon (CoreML); reduce window size; if no streamer is connected, the meeting still records and `transcribe_final` produces the post-meeting transcript |
 | R6 | Postgres / Redis / MinIO dependency conflicts in Docker | Low | High | Lock all images by digest; CI run on clean machine |
 | R6b | Worker process crashes mid-task (LLM hang, OOM on Whisper, Python fault) | Medium | Medium | TaskIQ retries on the Redis-backed broker; tasks are designed idempotent (deterministic IDs, upsert semantics) so retries do not double-write |
 | R7 | Demo-day Meet audio path differs from dev environment | Low | High | Rehearse from clean machines; record backup video |
@@ -985,17 +1007,17 @@ These map directly to the challenge rubric:
 
 Seven daily phases, each ending with a working end-to-end milestone in its own scope.
 
-### Phase 0 — Setup (day 0, ~4 hours)
-- Single-package monorepo (`src/tryniq/`), Docker Compose with health checks (postgres, redis, minio, api, worker), Makefile, lint config, empty extension. TaskIQ broker wired to Redis; one trivial `ping` task end-to-end.
+### Phase 0 — Setup (done)
+- `backend/` Python codebase, Docker Compose with health checks (postgres, redis, minio, api, worker), Makefile, lint config, empty extension. TaskIQ broker wired to Redis; one trivial task end-to-end.
 - **Done when:** `docker compose up` brings up all containers with green health checks; `task.kiq()` from api runs in worker; extension logs in Meet.
 
-### Phase 1 — Capture (day 1)
-- WebRTC tap, AudioWorklet, Silero VAD, DOM name resolution, WebSocket streaming. The api process streams PCM to MinIO.
-- **Done when:** two-person Meet produces two clean per-speaker WAV files in MinIO with correct names.
+### Phase 1 — Capture (done)
+- WebRTC tap, AudioWorklet, Silero VAD, DOM name resolution, WebSocket streaming. The api streams PCM to MinIO via `WavWriter`. See `docs/phase-1-spec.md`.
+- **Done when:** two-person Meet produces two clean per-speaker WAV files in MinIO with correct names. ✓
 
-### Phase 2 — Transcription (day 2)
-- `transcribe_live` and `transcribe_final` tasks, aggregator scaffolding, minimal UI showing live transcript via SSE bridged from Redis pub/sub.
-- **Done when:** speech in Meet appears in UI within 3 seconds with correct speaker labels; final pass refines the transcript after meeting end.
+### Phase 2 — Transcription (done)
+- Swift `streamer/` process running Parakeet-TDT v2 via `fluid_audio`, registered with the api at `/asr/sessions`; `transcribe_final` TaskIQ task; minimal UI showing live transcript via SSE bridged from Redis pub/sub.
+- **Done when:** speech in Meet appears in UI within 3 seconds with correct speaker labels; final pass refines the transcript after meeting end. ✓
 
 ### Phase 3 — Graph builder core (day 3)
 - Postgres `graph_nodes` / `graph_edges` schema, `aggregate_window` + `build_graph` tasks, LLM prompt with structured output, idempotency, source edges.
@@ -1074,66 +1096,88 @@ These are decisions deferred until implementation reveals more:
 
 ### 17.2 Repository structure
 
-Single Python package; `api` and `worker` are two entry points into the same code.
+Three top-level packages: `backend/` (Python), `streamer/` (Swift, live ASR), `extension/` (Chrome MV3 TS), `frontend/` (Next.js TS). The Python `api` and `worker` share one image and one codebase under `backend/app/` (entrypoint commands `api` / `worker` / `migrate`).
 
 ```
 tryniq/
 ├── README.md
 ├── Makefile
-├── docker-compose.yml
-├── .env.example
-├── pyproject.toml
-├── src/tryniq/
-│   ├── api/                     # FastAPI app: REST, WS /ingest, SSE
-│   │   ├── main.py
-│   │   ├── ingest.py            # WS handler, streams PCM → MinIO
-│   │   ├── meetings.py          # REST endpoints
-│   │   └── events.py            # SSE bridge from Redis pub/sub
-│   ├── tasks/                   # TaskIQ task definitions
-│   │   ├── __init__.py          # exports `broker`
-│   │   ├── transcribe.py        # transcribe_live, transcribe_final
-│   │   ├── aggregate.py         # aggregate_window
-│   │   ├── graph.py             # build_graph, rebuild_window
-│   │   ├── speaker.py           # compute_speaker_embeddings, match_speaker
-│   │   └── embed.py             # embed_utterances
-│   ├── pipeline/                # pure modules called from tasks
-│   │   ├── asr_live.py
-│   │   ├── asr_final.py
-│   │   ├── aggregator.py
-│   │   ├── graph_builder.py
-│   │   └── speaker_id.py
-│   ├── storage/
-│   │   ├── pg.py
-│   │   ├── minio.py
-│   │   └── redis.py
-│   ├── llm/                     # provider abstraction (Anthropic / Ollama / vLLM)
-│   ├── models/                  # Pydantic schemas (WS init, lifecycle, graph ops)
-│   └── config.py
-├── extension/                   # Chrome MV3 extension, separate package
-│   ├── manifest.json
-│   ├── src/
-│   │   ├── background.ts
-│   │   ├── content.ts
-│   │   ├── injected.ts          # main world: WebRTC tap
-│   │   ├── audio-worklet.ts
-│   │   ├── popup/
-│   │   └── ws-client.ts
-│   ├── vendor/silero_vad.onnx
-│   └── vite.config.ts
-├── ui/                          # Next.js, separate package
-│   ├── app/
-│   │   └── m/[meetingId]/page.tsx
-│   ├── components/
-│   │   ├── LiveTranscript.tsx
-│   │   ├── MeetingGraph.tsx
-│   │   ├── NotesPanel.tsx
-│   │   └── MeetingChat.tsx
-│   └── store/
-├── infra/
-│   └── postgres/init.sql
-└── tests/
-    ├── fixtures/
-    └── e2e/
+├── CLAUDE.md
+├── docs/
+│   ├── PRD.md
+│   ├── phase-1-spec.md
+│   └── google-meet-dom.html
+├── backend/
+│   ├── CONSTITUTION.md           # mandatory backend code-shape guide
+│   ├── compose.yml
+│   ├── Dockerfile
+│   ├── entrypoint.sh             # api | worker | migrate
+│   ├── pyproject.toml
+│   ├── alembic/
+│   └── app/
+│       ├── main.py               # FastAPI app, lifespan, router registration
+│       ├── config.py             # pydantic-settings root
+│       ├── db.py                 # async SQLAlchemy engine + SessionDep
+│       ├── tasks.py              # shared TaskIQ broker
+│       ├── logger.py
+│       ├── core/                 # base_schema, exceptions, decorators, …
+│       ├── meeting/
+│       │   ├── routers/
+│       │   │   ├── meeting.py    # REST /meetings
+│       │   │   └── event.py      # SSE /meetings/{id}/events + WS /events/ws
+│       │   ├── service.py
+│       │   ├── schemas.py
+│       │   ├── models.py
+│       │   ├── client.py         # RedisClient (pub/sub + partial cache)
+│       │   ├── stream.py
+│       │   ├── constants.py      # channel/key templates, lifecycle enums
+│       │   ├── config.py         # RedisSettings
+│       │   └── exceptions.py
+│       ├── ingest/
+│       │   ├── router.py         # WS /meetings/{m}/streams/{s}
+│       │   ├── service.py        # accepts PCM, writes WAV, forwards to streamer
+│       │   ├── client.py         # MinIO client
+│       │   ├── wav_writer.py
+│       │   ├── schemas.py
+│       │   └── …
+│       ├── asr/
+│       │   ├── router.py         # WS /asr/sessions (Swift streamer registration)
+│       │   ├── session.py        # WorkerSession (one connected streamer)
+│       │   ├── clients/
+│       │   │   ├── live.py       # LiveASRClient registry
+│       │   │   └── final.py      # faster-whisper wrapper
+│       │   ├── services/
+│       │   │   └── final.py      # FinalASRService
+│       │   ├── tasks.py          # transcribe_final
+│       │   ├── schemas.py        # /asr/sessions event schemas
+│       │   ├── constants.py      # binary frame header layout
+│       │   └── config.py         # ASRSettings
+│       ├── transcript/
+│       └── participant/
+├── streamer/                     # Swift, live ASR (Parakeet-TDT v2 via fluid_audio)
+│   ├── Package.swift
+│   └── src/
+│       ├── main.swift
+│       ├── BackendSocket.swift
+│       ├── SessionManager.swift
+│       ├── SpeakerTranscriber.swift
+│       ├── PCMBufferDecoder.swift
+│       ├── BinaryAudioFrame.swift
+│       ├── Messages.swift
+│       ├── TranscriptPublisher.swift
+│       ├── TranscriptTiming.swift
+│       ├── AsrConfigBuilder.swift
+│       └── EnvLoader.swift
+├── extension/                    # Chrome MV3 (TypeScript)
+└── frontend/                     # Next.js App Router (TypeScript)
+    └── src/
+        ├── app/
+        ├── components/
+        └── lib/
+            ├── api/              # client.ts, meetings.ts, events.ts, types.ts, adapters.ts
+            ├── config.ts
+            ├── hooks/
+            └── mock/
 ```
 
 ### 17.3 Demo script (5 minutes)

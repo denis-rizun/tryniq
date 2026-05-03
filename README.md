@@ -9,79 +9,108 @@ Most notetakers receive a mixed audio stream and rely on diarization models to g
 
 ## Capabilities (MVP)
 
-- Live transcription with sub-3s latency (Moonshine-base) and post-meeting refinement (faster-whisper large-v3).
-- Live-updating knowledge graph with Cytoscape visualization and structured Markdown notes.
-- Cross-meeting speaker memory via ECAPA-TDNN voice embeddings.
-- Cross-meeting topic linking via text embeddings.
-- "Chat with the meeting" RAG over transcripts with cited timestamps.
-- Markdown export for Notion / wiki / tickets.
-- Single `docker compose up` brings up the whole stack.
+- Live transcription with sub-3s latency (Parakeet-TDT v2 in a native Swift streamer on Apple Silicon) and post-meeting refinement (faster-whisper large-v3-turbo in the Python worker). *Phase 2 — done.*
+- Live-updating knowledge graph with Cytoscape visualization and structured Markdown notes. *Phase 3 — next.*
+- Cross-meeting speaker memory via ECAPA-TDNN voice embeddings. *Phase 5.*
+- Cross-meeting topic linking via text embeddings. *Phase 5.*
+- "Chat with the meeting" RAG over transcripts with cited timestamps. *Phase 6.*
+- Markdown export for Notion / wiki / tickets. *Phase 5.*
+- Self-hostable: backend stack runs via Docker Compose; the streamer runs natively on a Mac.
 
 ## Architecture
 
-One Python codebase (`tryniq/`) runs as **two processes**:
+Three processes (plus the browser extension and the Next.js UI):
 
-- **`api`** — FastAPI: REST + WebSockets (extension ingest) + SSE (UI live updates). Async, non-blocking only.
-- **`worker`** — TaskIQ worker: ASR (Moonshine + faster-whisper), aggregator windows, graph builder LLM extraction, speaker ID, embeddings. Anything CPU/GPU/LLM-bound runs here.
+- **`backend/api`** — FastAPI under `/api/v1`. REST + ingest WebSocket (`/meetings/{m}/streams/{s}`) + the streamer registration WebSocket (`/asr/sessions`) + SSE (`/meetings/{id}/events`) + global lifecycle WS (`/events/ws`). Async, non-blocking only.
+- **`backend/worker`** — TaskIQ worker (same Docker image, different command). Owns post-meeting CPU/GPU/LLM work: today `transcribe_final` (faster-whisper); Phase 3+ adds aggregator, graph builder, speaker ID, embeddings.
+- **`streamer/`** — Swift 6 process running live ASR (Parakeet-TDT v2 via `fluid_audio`, CoreML on Apple Silicon). Connects to the api as a WebSocket worker on `/asr/sessions`; the api forwards per-speaker PCM frames and the streamer publishes `partial` / `final` transcript events back. Multiple streamer instances may register; the api round-robins streams by lowest load. Not containerized — runs natively on a Mac.
 
-Three infra containers: **Postgres** (with pgvector — meetings, utterances, graph nodes/edges, embeddings, speaker profiles), **MinIO** (per-speaker WAVs), **Redis** (TaskIQ broker + UI pub/sub). Optional Ollama for local LLM. The Next.js UI is a separate frontend container.
+Three infra containers: **Postgres + pgvector** (meetings, utterances, participants; graph nodes/edges + embeddings in Phase 3+), **MinIO** (per-speaker WAVs + exports), **Redis** (TaskIQ broker + UI pub/sub). LLM provider is configurable; default Anthropic Claude Haiku 4.5, self-host fallback to Qwen 2.5 14B via Ollama/vLLM (Phase 3).
 
 ```
   Browser (extension)
-        │ WebSocket PCM
+        │ WS /meetings/{m}/streams/{s}  (PCM + control)
         ▼
-  ┌─────────┐    enqueue    ┌──────────┐
-  │   api   │──────────────▶│  worker  │
-  │ FastAPI │   TaskIQ/Redis│ TaskIQ   │
-  └────┬────┘◀──────────────└────┬─────┘
-       │   Redis pub/sub          │
-       │ (meeting:{id}:events)    │
-       ▼                          ▼
-   SSE → UI                  reads PCM,
-                             writes graph
-       │                          │
-       └─────────┬────────────────┘
-                 ▼
+  ┌─────────┐                         ┌──────────────────┐
+  │   api   │◀── WS /asr/sessions ───│ streamer (Swift) │
+  │ FastAPI │   PCM out / events in   │ Parakeet-TDT v2  │
+  └────┬────┘                         │  fluid_audio     │
+       │   ▲                          └──────────────────┘
+       │   │ Redis pub/sub
+       │   │ meeting:{id}:events
+       │   │
+       │   │ TaskIQ enqueue (post-meeting)
+       │   ▼
+       │  ┌──────────┐
+       │  │  worker  │  transcribe_final (faster-whisper); Phase 3+: graph
+       │  └────┬─────┘
+       │       │
+       ▼       ▼
+   SSE / global WS → UI       writes ──▶ Postgres / MinIO
+
    ┌──────────┐  ┌──────────┐  ┌──────────┐
    │ Postgres │  │  MinIO   │  │  Redis   │
-   │ pgvector │  │ (audio)  │  │ broker + │
-   │  graph   │  │          │  │ pubsub   │
+   │ pgvector │  │ per-spk  │  │ broker + │
+   │          │  │  WAVs    │  │ pub/sub  │
    └──────────┘  └──────────┘  └──────────┘
 ```
 
-Audio bytes are never task arguments — `api` streams PCM into MinIO and enqueues object paths/IDs; the worker reads from MinIO.
+Audio bytes are never task arguments. The api buffers PCM straight to MinIO via `WavWriter` and forwards a copy to the assigned streamer over its WebSocket; PCM never goes through TaskIQ or Redis.
 
-LLM defaults to Anthropic Claude Haiku 4.5 with a self-host fallback to Qwen 2.5 14B via Ollama/vLLM. All other models run locally.
+## Repository layout
+
+```
+backend/    FastAPI api + TaskIQ worker (Python 3.13). See backend/CONSTITUTION.md.
+streamer/   Swift 6 live-ASR worker (Parakeet-TDT v2). See streamer/CONSTITUTION.md.
+frontend/   Next.js 16 App Router UI (TS strict, pnpm). See frontend/CONSTITUTION.md.
+extension/  Chrome MV3 extension (TS, pnpm).
+docs/       PRD.md (source of truth), phase-1-spec.md, etc.
+CLAUDE.md   Top-level guidance for agents and maintainers.
+```
+
+Each package has its own **CONSTITUTION.md** that is binding for code shape inside that package — agents and maintainers must read the relevant constitution before editing. `CLAUDE.md` and `docs/PRD.md` win on architectural questions; constitutions win on code shape.
 
 ## Running locally
 
-Full stack via Docker Compose:
+Backend stack (Postgres, MinIO, Redis, api, worker, migrations) via Docker Compose:
 
 ```
-cp .env.example .env
-docker compose up -d --build
+cp backend/.env.example backend/.env
+make bc                 # cd backend && docker compose up --build -d
 ```
 
-Brings up `postgres`, `minio`, `redis`, `api`, and `worker`. The API listens on `:8000`. MinIO console on `:9101`.
+The API listens on `:8000` (root path `/api/v1`); MinIO console on `:9101`; redis-insight on `:5540`.
 
-For dev with hot reload (run from repo root with the package installed):
-
-```
-uvicorn tryniq.api.main:app --reload --port 8000
-taskiq worker tryniq.tasks:broker --reload
-```
-
-Extension build:
+Frontend dev server:
 
 ```
-cd extension && pnpm install && pnpm build
-# load extension/dist/ as unpacked in chrome://extensions
+cp frontend/.env.example frontend/.env
+make fr                 # cd frontend && pnpm dev
 ```
+
+Extension build (load `extension/dist/` as unpacked in `chrome://extensions`):
+
+```
+make ext-build          # or `make ext-dev` for watch mode
+```
+
+Streamer (live ASR — requires Apple Silicon for CoreML):
+
+```
+cd streamer
+cp .env.example .env    # set ASR_LIVE_AUTH_TOKEN and api URL
+swift run streamer
+```
+
+Without a streamer connected, meetings still record cleanly to MinIO and `transcribe_final` produces the post-meeting transcript — only the live transcript is missing.
 
 ## Dependencies
 
-Backend: `fastapi`, `uvicorn`, `taskiq`, `taskiq-redis`, `redis`, `asyncpg`, `pgvector`, `minio`, `pydantic`, `pydantic-settings`, `structlog`. Plus model deps in the worker (`onnxruntime`, `faster-whisper`, `speechbrain`, etc.).
+- **Backend** (`backend/pyproject.toml`): `fastapi`, `uvicorn`, `taskiq`, `taskiq-redis`, `redis`, `asyncpg`, `sqlmodel`, `pgvector`, `minio`, `pydantic`, `pydantic-settings`, `structlog`, `faster-whisper`. No Python live-ASR deps — live ASR is in the streamer.
+- **Streamer** (`streamer/Package.swift`): `fluid_audio` (Parakeet-TDT v2 via CoreML).
+- **Frontend** (`frontend/package.json`): Next.js 16, React 19, TanStack Query, Zustand, Biome.
+- **Extension** (`extension/package.json`): Vite + TypeScript, Silero VAD ONNX.
 
 ## Status
 
-Pre-implementation — see [`docs/PRD.md`](docs/PRD.md) for the full product requirements. Target demo: 2026-05-11.
+Phases 1 (capture) and 2 (live transcription) are **done**. Phase 3 (graph builder) and Phase 5 (cross-meeting memory) are next — see [`docs/PRD.md`](docs/PRD.md) §14. Target demo: 2026-05-11.
