@@ -9,6 +9,7 @@ from app.asr.router import router as asr_router
 from app.config import config
 from app.core.exceptions import register_exception_handler
 from app.db import dispose_engine
+from app.graph.router import router as graph_router
 from app.ingest.client import minio_client
 from app.ingest.router import router as ingest_router
 from app.logger import configure_logging
@@ -61,6 +62,7 @@ app.include_router(transcript_router)
 app.include_router(participant_router)
 app.include_router(events_router)
 app.include_router(asr_router)
+app.include_router(graph_router)
 
 register_exception_handler(app)
 
