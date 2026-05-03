@@ -91,6 +91,9 @@ class RedisClient:
         await self.client.publish(EVENT_CHANNEL.format(meeting_id=meeting_id), payload)
         await self.client.delete(PARTIAL_KEY.format(stream_id=stream_id))
 
+    async def publish_graph_patch(self, meeting_id: UUID, payload: str) -> None:
+        await self.client.publish(EVENT_CHANNEL.format(meeting_id=meeting_id), payload)
+
     async def get_partial_cache(self, stream_id: UUID) -> str | None:
         raw = await self.client.get(PARTIAL_KEY.format(stream_id=stream_id))
         return raw.decode() if isinstance(raw, bytes) else None

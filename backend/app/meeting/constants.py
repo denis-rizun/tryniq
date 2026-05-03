@@ -31,3 +31,4 @@ class MeetingEventKind(StrEnum):
     MEETING_LIFECYCLE = "meeting_lifecycle"
     PARTIAL_TRANSCRIPT = "partial_transcript"
     TRANSCRIPT_SEGMENT = "transcript_segment"
+    GRAPH_PATCH = "graph_patch"
