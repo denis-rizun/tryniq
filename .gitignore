@@ -15,8 +15,11 @@ Desktop.ini
 .settings/
 
 backend/.env
-backend/.env.example
+frontend/.env
+streamer/.env
 !backend/.env.example
+!frontend/.env.example
+!streamer/.env.example
 *.pem
 *.key
 secrets/
@@ -27,6 +30,7 @@ __pycache__/
 *.so
 .Python
 build/
+.build/
 develop-eggs/
 dist/
 downloads/
