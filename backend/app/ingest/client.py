@@ -57,3 +57,6 @@ class MinioClient:
             aws_secret_access_key=config.minio.SECRET_KEY.get_secret_value(),
         ) as client:
             yield client
+
+
+minio_client = MinioClient()

@@ -1,12 +1,11 @@
 import struct
 
-from app.ingest.client import MinioClient
+from app.ingest.client import minio_client
 from app.ingest.constants import BITS_PER_SAMPLE, BYTES_PER_SAMPLE, CHANNELS, SAMPLE_RATE, WAV_CONTENT_TYPE
 
 
 class WavWriter:
-    def __init__(self, storage: MinioClient, key: str) -> None:
-        self._storage = storage
+    def __init__(self, key: str) -> None:
         self.key = key
         self._audio_buffer = bytearray()
         self.closed = False
@@ -27,7 +26,7 @@ class WavWriter:
             return 0
 
         wav_file = self._build_wav_header(audio_byte_count) + bytes(self._audio_buffer)
-        await self._storage.put_object(self.key, wav_file, WAV_CONTENT_TYPE)
+        await minio_client.put_object(self.key, wav_file, WAV_CONTENT_TYPE)
         return audio_byte_count
 
     def abort(self) -> None:

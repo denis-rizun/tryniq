@@ -8,7 +8,8 @@ from pydantic import ValidationError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.ingest.client import MinioClient
+from app.asr.clients.live import LiveASRClient
+from app.ingest.client import minio_client
 from app.ingest.constants import INIT_VOICE_TIMEOUT
 from app.ingest.schemas import CONTROL_ADAPTER, StreamInitMessage
 from app.ingest.wav_writer import WavWriter
@@ -24,21 +25,21 @@ class IngestService:
     def __init__(
         self,
         session: AsyncSession,
-        minio_client: MinioClient,
         participant_service: ParticipantService,
+        live_asr_client: LiveASRClient,
     ) -> None:
         self._session = session
-        self._minio_client = minio_client
         self._participant_service = participant_service
+        self._live_asr_client = live_asr_client
 
     async def does_meeting_exist(self, meeting_id: UUID) -> bool:
         result = await self._session.exec(select(Meeting.id).where(Meeting.id == meeting_id))
         return result.one_or_none() is not None
 
     async def open_writer(self, meeting_id: UUID, stream_id: UUID) -> WavWriter:
-        primary_key = self._minio_client.get_stream_object_key(meeting_id, stream_id)
-        part = 2 if await self._minio_client.object_exists(primary_key) else 1
-        return WavWriter(self._minio_client, self._minio_client.get_stream_object_key(meeting_id, stream_id, part))
+        primary_key = minio_client.get_stream_object_key(meeting_id, stream_id)
+        part = 2 if await minio_client.object_exists(primary_key) else 1
+        return WavWriter(minio_client.get_stream_object_key(meeting_id, stream_id, part))
 
     async def handle_stream(self, ws: WebSocket, meeting_id: UUID, stream_id: UUID) -> None:
         await ws.accept()
@@ -64,6 +65,14 @@ class IngestService:
             is_local_user=speaker.is_local_user,
             object_key=writer.key,
             has_participant=participant is not None,
+        )
+
+        await self._assign_swift_worker(
+            meeting_id=meeting_id,
+            stream_id=stream_id,
+            participant_id=participant.id if participant else None,
+            display_name=speaker.display_name,
+            is_local_user=speaker.is_local_user,
         )
 
         await self._consume_stream(
@@ -134,7 +143,7 @@ class IngestService:
 
         return first_message
 
-    async def _consume_stream(
+    async def _consume_stream(  # noqa: C901
         self,
         ws: WebSocket,
         writer: WavWriter,
@@ -153,6 +162,7 @@ class IngestService:
 
                 if (audio_chunk := frame.get("bytes")) is not None:
                     writer.append(audio_chunk)
+                    await self._live_asr_client.forward_audio_chunk(stream_id, audio_chunk)
                     continue
 
                 if (raw_control_payload := frame.get("text")) is None:
@@ -218,15 +228,42 @@ class IngestService:
         except ParticipantNameUnresolvedError:
             return participant
 
-    @classmethod
+    async def _assign_swift_worker(
+        self,
+        meeting_id: UUID,
+        stream_id: UUID,
+        participant_id: UUID | None,
+        display_name: str | None,
+        is_local_user: bool,
+    ) -> None:
+        try:
+            assigned = await self._live_asr_client.assign_stream(
+                meeting_id=meeting_id,
+                stream_id=stream_id,
+                participant_id=participant_id,
+                display_name=display_name,
+                is_local_user=is_local_user,
+            )
+            if assigned is None:
+                logger.info(
+                    "live_asr: no swift worker connected; live transcript disabled for stream",
+                    stream_id=str(stream_id),
+                )
+        except Exception as e:
+            logger.warning("live_asr: assign_stream failed", error=str(e), stream_id=str(stream_id))
+
     async def _finalise(
-        cls,
+        self,
         writer: WavWriter,
         stream_id: UUID,
         participant: Participant | None,
         discarded: bool,
         discard_reason: str | None,
     ) -> None:
+        try:
+            await self._live_asr_client.close_stream(stream_id)
+        except Exception as e:
+            logger.debug("live_asr: close_stream failed", error=str(e), stream_id=str(stream_id))
         participant_id = participant.id if participant else None
         if discarded:
             writer.abort()
