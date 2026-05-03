@@ -50,6 +50,12 @@ class ParticipantService:
         result = await self.session.exec(query)
         return list(result.all())
 
+    async def get_by_stream(self, meeting_id: UUID, stream_id: UUID) -> Participant | None:
+        query = (
+            select(Participant).where(Participant.meeting_id == meeting_id).where(Participant.stream_id == stream_id)
+        )
+        return (await self.session.exec(query)).one_or_none()
+
     async def update(self, instance: Participant, name: str) -> Participant:
         if instance.name != name:
             instance.name = name
