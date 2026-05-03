@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import { GlobalEventsProvider } from '@/lib/api/global-events-provider';
+import { QueryProvider } from '@/lib/api/query-client';
 import { ShellOverlays } from '@/components/shell/shell-overlays';
 import { Sidebar } from '@/components/shell/sidebar';
+import { Toaster } from '@/components/shell/toaster';
 import { Topbar } from '@/components/shell/topbar';
 import './globals.css';
 
@@ -24,14 +27,18 @@ const RootLayout = ({ children }: { children: ReactNode }) => (
       />
     </head>
     <body>
-      <div className="app-shell">
-        <Sidebar />
-        <main style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <Topbar />
-          {children}
-          <ShellOverlays />
-        </main>
-      </div>
+      <QueryProvider>
+        <GlobalEventsProvider />
+        <div className="app-shell">
+          <Sidebar />
+          <main style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+            <Topbar />
+            {children}
+            <ShellOverlays />
+          </main>
+        </div>
+        <Toaster />
+      </QueryProvider>
     </body>
   </html>
 );

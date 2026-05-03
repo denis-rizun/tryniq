@@ -448,6 +448,32 @@ textarea {
   background: var(--color-paper-lift);
 }
 
+.meeting-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-ink);
+}
+.meeting-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.meeting-status-live .meeting-status__dot {
+  background: var(--color-accent-500);
+}
+.meeting-status-final .meeting-status__dot {
+  background: var(--color-ink-tertiary);
+}
+.meeting-status-final {
+  color: var(--color-ink-secondary);
+}
+.meeting-status-idle {
+  color: var(--color-ink-tertiary);
+}
+
 /* Overview split */
 .overview {
   display: grid;
@@ -1268,4 +1294,73 @@ textarea {
 }
 .text-error {
   color: var(--color-error);
+}
+
+/* Toaster (sonner) — lab paper aesthetic */
+@keyframes tryniq-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes tryniq-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.tryniq-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 320px;
+  padding: 12px 14px;
+  background: var(--color-paper-lift);
+  color: var(--color-ink);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-ink);
+  border-radius: 4px;
+  box-shadow: 0 6px 20px -8px rgba(26, 24, 21, 0.18);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  animation: tryniq-toast-in 220ms var(--ease-snap);
+}
+.tryniq-toast[data-removed="true"] {
+  animation: tryniq-toast-out 200ms var(--ease-snap) forwards;
+}
+.tryniq-toast[data-type="success"] {
+  border-left-color: var(--color-decision);
+}
+.tryniq-toast[data-type="info"] {
+  border-left-color: var(--color-accent-500);
+}
+.tryniq-toast[data-type="warning"] {
+  border-left-color: var(--color-action);
+}
+.tryniq-toast[data-type="error"] {
+  border-left-color: var(--color-error);
+}
+.tryniq-toast__title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-ink);
+  margin-bottom: 2px;
+}
+.tryniq-toast__desc {
+  font-size: 13px;
+  color: var(--color-ink-secondary);
+}
+.tryniq-toast__icon {
+  display: none;
 }
