@@ -9,6 +9,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.asr.clients.live import LiveASRClient
+from app.config import config
 from app.ingest.client import minio_client
 from app.ingest.constants import INIT_VOICE_TIMEOUT
 from app.ingest.schemas import CONTROL_ADAPTER, StreamInitMessage
@@ -67,13 +68,16 @@ class IngestService:
             has_participant=participant is not None,
         )
 
-        await self._assign_swift_worker(
-            meeting_id=meeting_id,
-            stream_id=stream_id,
-            participant_id=participant.id if participant else None,
-            display_name=speaker.display_name,
-            is_local_user=speaker.is_local_user,
-        )
+        if config.asr.LIVE_ENABLED:
+            await self._assign_swift_worker(
+                meeting_id=meeting_id,
+                stream_id=stream_id,
+                participant_id=participant.id if participant else None,
+                display_name=speaker.display_name,
+                is_local_user=speaker.is_local_user,
+            )
+        else:
+            logger.info("live_asr: disabled by ASR_LIVE_ENABLED=false", stream_id=str(stream_id))
 
         await self._consume_stream(
             ws=ws,
@@ -162,7 +166,8 @@ class IngestService:
 
                 if (audio_chunk := frame.get("bytes")) is not None:
                     writer.append(audio_chunk)
-                    await self._live_asr_client.forward_audio_chunk(stream_id, audio_chunk)
+                    if config.asr.LIVE_ENABLED:
+                        await self._live_asr_client.forward_audio_chunk(stream_id, audio_chunk)
                     continue
 
                 if (raw_control_payload := frame.get("text")) is None:
@@ -260,10 +265,11 @@ class IngestService:
         discarded: bool,
         discard_reason: str | None,
     ) -> None:
-        try:
-            await self._live_asr_client.close_stream(stream_id)
-        except Exception as e:
-            logger.debug("live_asr: close_stream failed", error=str(e), stream_id=str(stream_id))
+        if config.asr.LIVE_ENABLED:
+            try:
+                await self._live_asr_client.close_stream(stream_id)
+            except Exception as e:
+                logger.debug("live_asr: close_stream failed", error=str(e), stream_id=str(stream_id))
         participant_id = participant.id if participant else None
         if discarded:
             writer.abort()

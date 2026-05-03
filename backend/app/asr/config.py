@@ -9,6 +9,7 @@ from app.core.config import BASE_MODEL_CONFIG
 class ASRSettings(BaseSettings):
     model_config = SettingsConfigDict(**BASE_MODEL_CONFIG, env_prefix="ASR_")
 
+    LIVE_ENABLED: bool = True
     LIVE_PROVIDER: Literal["fluid_audio"] = "fluid_audio"
     LIVE_MODEL: Literal["parakeet-tdt-v2"] = "parakeet-tdt-v2"
     LIVE_IDLE_TIMEOUT_S: int = 120
