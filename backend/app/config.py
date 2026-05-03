@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.asr.config import ASRSettings
 from app.core.config import BASE_MODEL_CONFIG
 from app.ingest.config import MinioSettings
+from app.meeting.config import RedisSettings
 
 
 class APISettings(BaseSettings):
@@ -53,12 +54,6 @@ class DatabaseSettings(BaseSettings):
             f"postgresql{driver}://{self.USER}:{self.PASSWORD.get_secret_value()}"
             f"@{self.HOST}:{self.PORT}/{self.DATABASE}"
         )
-
-
-class RedisSettings(BaseSettings):
-    model_config = SettingsConfigDict(**BASE_MODEL_CONFIG, env_prefix="REDIS_")
-
-    URL: str = "redis://redis:6379/0"
 
 
 class Settings(BaseSettings):
