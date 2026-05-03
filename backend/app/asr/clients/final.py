@@ -5,14 +5,13 @@ from typing import Any
 
 import structlog
 
-from app.asr.interface import ASRClient
-from app.asr.types import AsrSegment, WordTiming
+from app.asr.types import ASRSegment, WordTiming
 from app.config import config
 
 logger = structlog.get_logger()
 
 
-class FasterWhisperClient(ASRClient):
+class FasterWhisperClient:
     def __init__(self) -> None:
         self._model = None
         self._lock = Lock()
@@ -29,29 +28,29 @@ class FasterWhisperClient(ASRClient):
 
             logger.info(
                 "loading faster-whisper model",
-                model=config.asr.MODEL,
-                device=config.asr.DEVICE,
-                compute_type=config.asr.COMPUTE_TYPE,
+                model=config.asr.FINAL_MODEL,
+                device=config.asr.FINAL_DEVICE,
+                compute_type=config.asr.FINAL_COMPUTE_TYPE,
             )
             self._model = WhisperModel(
-                config.asr.MODEL,
-                device=config.asr.DEVICE,
-                compute_type=config.asr.COMPUTE_TYPE,
+                config.asr.FINAL_MODEL,
+                device=config.asr.FINAL_DEVICE,
+                compute_type=config.asr.FINAL_COMPUTE_TYPE,
             )
         return self._model
 
-    def transcribe(self, wav_bytes: bytes) -> list[AsrSegment]:
+    def transcribe(self, wav_bytes: bytes) -> list[ASRSegment]:
         model = self._ensure_model()
         segments_iter, _ = model.transcribe(
             io.BytesIO(wav_bytes),
-            language=config.asr.LANGUAGE,
+            language=config.asr.FINAL_LANGUAGE,
             word_timestamps=True,
             vad_filter=False,
             beam_size=5,
-            initial_prompt=config.asr.INITIAL_PROMPT,
+            initial_prompt=config.asr.FINAL_INITIAL_PROMPT,
         )
 
-        segments: list[AsrSegment] = []
+        segments: list[ASRSegment] = []
         for seg in segments_iter:
             words: list[WordTiming] = []
             if seg.words:
@@ -70,7 +69,7 @@ class FasterWhisperClient(ASRClient):
                 confidence = math.exp(seg.avg_logprob)
 
             segments.append(
-                AsrSegment(
+                ASRSegment(
                     t_start=float(seg.start),
                     t_end=float(seg.end),
                     text=seg.text.strip(),
@@ -79,7 +78,3 @@ class FasterWhisperClient(ASRClient):
                 )
             )
         return segments
-
-    @property
-    def model_name(self) -> str:
-        return f"faster-whisper-{config.asr.MODEL}"
