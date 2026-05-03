@@ -93,7 +93,15 @@ class MeetingService:
         await self._save(meeting)
         logger.info("meeting promoted to final", meeting_id=meeting_id)
         await redis_client.publish_meeting_lifecycle(meeting.id, LifecycleEvent.FINAL)
+        await self._enqueue_graph_build(meeting_id)
         return True
+
+    @staticmethod
+    async def _enqueue_graph_build(meeting_id: UUID) -> None:
+        from app.graph.tasks import build_graph
+
+        await build_graph.kiq(str(meeting_id), None, None)
+        logger.debug("enqueued build_graph", meeting_id=meeting_id)
 
     async def _get_finalizing(self, meeting_id: UUID) -> Meeting | None:
         meeting = (await self.session.exec(select(Meeting).where(Meeting.id == meeting_id))).one_or_none()
