@@ -30,13 +30,22 @@ const formatRelative = (iso: string): string => {
   return `${days} day${days === 1 ? '' : 's'} ago`;
 };
 
+const PROCESSING_STATUSES: ReadonlySet<MeetingStatus> = new Set([
+  'live',
+  'uploading',
+  'normalizing',
+  'diarizing',
+  'transcribing',
+  'finalizing',
+]);
+
 export const isActive = (s: MeetingStatus | undefined): boolean =>
-  s === 'live' || s === 'finalizing';
+  s !== undefined && PROCESSING_STATUSES.has(s);
 
 const toState = (s: MeetingStatus): 'live' | 'finalizing' | 'final' => {
   if (s === 'live') return 'live';
-  if (s === 'finalizing') return 'finalizing';
-  return 'final';
+  if (s === 'final' || s === 'failed') return 'final';
+  return 'finalizing';
 };
 
 export const toMeetingListItem = (m: MeetingResponse): MeetingListItem => {

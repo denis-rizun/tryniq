@@ -1,4 +1,12 @@
-export type MeetingStatus = 'live' | 'finalizing' | 'final' | 'failed';
+export type MeetingStatus =
+  | 'live'
+  | 'uploading'
+  | 'normalizing'
+  | 'diarizing'
+  | 'transcribing'
+  | 'finalizing'
+  | 'final'
+  | 'failed';
 
 export interface MeetingResponse {
   id: string;
@@ -43,7 +51,16 @@ export interface TranscriptResponse {
 export interface MeetingLifecycleEvent {
   kind: 'meeting_lifecycle';
   meeting_id: string;
-  event: 'started' | 'ended' | 'finalizing' | 'final';
+  event:
+    | 'started'
+    | 'ended'
+    | 'uploading'
+    | 'normalizing'
+    | 'diarizing'
+    | 'transcribing'
+    | 'finalizing'
+    | 'final'
+    | 'failed';
   timestamp: string;
 }
 
