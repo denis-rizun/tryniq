@@ -3,7 +3,7 @@ from uuid import NAMESPACE_OID, UUID, uuid5
 
 import structlog
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlmodel import select, col
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import config
@@ -189,10 +189,12 @@ class GraphService:
         if not non_empty_indices:
             return [None] * len(node_operations)
 
-        vectors = await get_embedding_client().embed_many([texts[i] for i in non_empty_indices])
+        embedding_client = get_embedding_client()
+        vectors = await embedding_client.embed_many([texts[i] for i in non_empty_indices])
         result: list[list[float] | None] = [None] * len(node_operations)
         for i, vec in zip(non_empty_indices, vectors, strict=True):
             result[i] = vec
+
         return result
 
     async def _add_node(

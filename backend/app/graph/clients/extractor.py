@@ -7,7 +7,7 @@ from mistralai.client.sdk import Mistral
 from pydantic import ValidationError
 
 from app.config import config
-from app.graph.constants import SYSTEM_PROMPT, TOOL_NAME, ANTHROPIC_TOOL, MISTRAL_TOOL
+from app.graph.constants import ANTHROPIC_TOOL, MISTRAL_TOOL, SYSTEM_PROMPT, TOOL_NAME
 from app.graph.exceptions import InvalidGraphOperationError
 from app.graph.schemas import GRAPH_OPERATIONS_ADAPTER, GraphOperation
 
@@ -76,14 +76,78 @@ class GraphExtractor:
             return []
 
         for call in choices[0].message.tool_calls or []:
-            args = call.function.arguments
-            if isinstance(args, str):
-                args = json.loads(args)
-            ops = (args or {}).get("ops", [])
-            if isinstance(ops, str):
-                ops = json.loads(ops)
+            args = _coerce_json(call.function.arguments)
+            if not isinstance(args, dict):
+                continue
+            ops = _coerce_json(args.get("ops", []))
+            if not isinstance(ops, list):
+                continue
             return list(ops)
         return []
+
+
+def _coerce_json(value: object) -> object:
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    repaired = _extract_balanced_json(text)
+    if repaired is None:
+        logger.warning("could not parse LLM tool args as JSON", preview=text[:300])
+        return None
+    try:
+        return json.loads(repaired)
+    except json.JSONDecodeError as exc:
+        logger.warning("repaired LLM JSON still invalid", error=str(exc), preview=repaired[:300])
+        return None
+
+
+def _extract_balanced_json(text: str) -> str | None:
+    start, open_ch, close_ch = _find_json_start(text)
+    if start < 0:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            in_string, escape = _step_in_string(ch, escape)
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == open_ch:
+            depth += 1
+        elif ch == close_ch:
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
+
+def _find_json_start(text: str) -> tuple[int, str, str]:
+    obj = text.find("{")
+    arr = text.find("[")
+    if obj < 0 and arr < 0:
+        return -1, "", ""
+    if obj < 0 or (0 <= arr < obj):
+        return arr, "[", "]"
+    return obj, "{", "}"
+
+
+def _step_in_string(ch: str, escape: bool) -> tuple[bool, bool]:
+    if escape:
+        return True, False
+    if ch == "\\":
+        return True, True
+    if ch == '"':
+        return False, False
+    return True, False
 
 
 @lru_cache(maxsize=1)
