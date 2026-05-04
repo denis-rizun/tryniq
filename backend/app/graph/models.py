@@ -1,9 +1,8 @@
 from datetime import UTC, datetime
-from enum import Enum as PyEnum
 from uuid import UUID
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column, DateTime, Enum
+from sqlalchemy import Column, DateTime
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 from sqlmodel._compat import SQLModelConfig

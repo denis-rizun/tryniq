@@ -19,14 +19,14 @@ depends_on = None
 
 
 node_type = postgresql.ENUM(
-    "Meeting",
-    "Person",
-    "Topic",
-    "Decision",
-    "ActionItem",
-    "OpenQuestion",
-    "Entity",
-    "Utterance",
+    "MEETING",
+    "PERSON",
+    "TOPIC",
+    "DECISION",
+    "ACTION_ITEM",
+    "OPEN_QUESTION",
+    "ENTITY",
+    "UTTERANCE",
     name="nodetype",
     create_type=False,
 )
@@ -44,9 +44,9 @@ edge_type = postgresql.ENUM(
     create_type=False,
 )
 node_status = postgresql.ENUM(
-    "provisional",
-    "confirmed",
-    "superseded",
+    "PROVISIONAL",
+    "CONFIRMED",
+    "SUPERSEDED",
     name="nodestatus",
     create_type=False,
 )
@@ -64,7 +64,7 @@ def upgrade() -> None:
         sa.Column("meeting_id", sa.Uuid(), nullable=False),
         sa.Column("type", node_type, nullable=False),
         sa.Column("fields", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.Column("status", node_status, nullable=False, server_default=sa.text("'provisional'")),
+        sa.Column("status", node_status, nullable=False, server_default=sa.text("'PROVISIONAL'")),
         sa.Column("embedding", Vector(1536), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.PrimaryKeyConstraint("id", name=op.f("graph_node_pkey")),
