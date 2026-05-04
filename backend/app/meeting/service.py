@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from secrets import token_urlsafe
 from uuid import UUID
 
 import structlog
@@ -93,15 +94,39 @@ class MeetingService:
         await self._save(meeting)
         logger.info("meeting promoted to final", meeting_id=meeting_id)
         await redis_client.publish_meeting_lifecycle(meeting.id, LifecycleEvent.FINAL)
-        await self._enqueue_graph_build(meeting_id)
+        await self.enqueue_graph_build(meeting_id)
         return True
 
     @staticmethod
-    async def _enqueue_graph_build(meeting_id: UUID) -> None:
+    async def enqueue_graph_build(meeting_id: UUID) -> None:
         from app.graph.tasks import build_graph
 
         await build_graph.kiq(str(meeting_id), None, None)
         logger.debug("enqueued build_graph", meeting_id=meeting_id)
+
+    async def create_for_upload(self, title: str) -> Meeting:
+        code = f"upl-{token_urlsafe(8).lower()}"
+        room = MeetingRoom(meet_code=code, title=title)
+        self.session.add(room)
+        await self.session.flush()
+        meeting = Meeting(title=title, room_id=room.id, status=MeetingStatus.UPLOADING)
+        self.session.add(meeting)
+        await self.session.commit()
+        await self.session.refresh(meeting)
+        meeting.meet_code = room.meet_code
+        meeting.meet_url = self.build_meet_url(room.meet_code)
+
+        logger.debug("upload meeting created", id=meeting.id, room_id=room.id)
+        await redis_client.publish_meeting_lifecycle(meeting.id, LifecycleEvent.STARTED)
+        await redis_client.publish_meeting_lifecycle(meeting.id, LifecycleEvent.UPLOADING)
+        return meeting
+
+    async def set_status(self, meeting_id: UUID, status: MeetingStatus) -> None:
+        meeting = await self.retrieve(meeting_id)
+        meeting.status = status
+        if status == MeetingStatus.FINAL and meeting.ended_at is None:
+            meeting.ended_at = datetime.now(UTC)
+        await self._save(meeting)
 
     async def _get_finalizing(self, meeting_id: UUID) -> Meeting | None:
         meeting = (await self.session.exec(select(Meeting).where(Meeting.id == meeting_id))).one_or_none()

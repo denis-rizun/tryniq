@@ -45,6 +45,22 @@ class ParticipantService:
         logger.debug("participant is created", id=participant.id)
         return participant
 
+    async def create_for_upload(
+        self,
+        meeting_id: UUID,
+        stream_id: UUID,
+        label: str,
+    ) -> Participant:
+        participant = Participant(
+            meeting_id=meeting_id,
+            stream_id=stream_id,
+            name=label,
+            is_local_user=False,
+        )
+        await self._save(participant)
+        logger.debug("upload participant created", id=participant.id, label=label)
+        return participant
+
     async def list(self, meeting: Meeting) -> list[Participant]:
         query = select(Participant).where(Participant.meeting_id == meeting.id)
         result = await self.session.exec(query)

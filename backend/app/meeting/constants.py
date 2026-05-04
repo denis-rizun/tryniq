@@ -4,6 +4,10 @@ from enum import StrEnum
 
 class MeetingStatus(StrEnum):
     LIVE = "live"
+    UPLOADING = "uploading"
+    NORMALIZING = "normalizing"
+    DIARIZING = "diarizing"
+    TRANSCRIBING = "transcribing"
     FINALIZING = "finalizing"
     FINAL = "final"
     FAILED = "failed"
@@ -20,11 +24,24 @@ HEARTBEAT_INTERVAL_SECONDS = 15.0
 class LifecycleEvent(StrEnum):
     STARTED = "started"
     ENDED = "ended"
+    UPLOADING = "uploading"
+    NORMALIZING = "normalizing"
+    DIARIZING = "diarizing"
+    TRANSCRIBING = "transcribing"
     FINALIZING = "finalizing"
     FINAL = "final"
+    FAILED = "failed"
 
 
-GLOBAL_LIFECYCLE_EVENTS = frozenset({LifecycleEvent.STARTED, LifecycleEvent.ENDED, LifecycleEvent.FINAL})
+GLOBAL_LIFECYCLE_EVENTS = frozenset(
+    {
+        LifecycleEvent.STARTED,
+        LifecycleEvent.ENDED,
+        LifecycleEvent.UPLOADING,
+        LifecycleEvent.FINAL,
+        LifecycleEvent.FAILED,
+    }
+)
 
 
 class MeetingEventKind(StrEnum):

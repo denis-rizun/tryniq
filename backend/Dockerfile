@@ -18,6 +18,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
+    git \
     && pip install --no-cache-dir uv==0.11.8
 
 WORKDIR /app
@@ -26,6 +27,18 @@ COPY pyproject.toml uv.lock ./
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev --python python3
+
+# DiariZen ships its own pyannote-audio fork (in-tree at pyannote-audio/). Upstream
+# pyannote PyPI does NOT work — its SpeakerDiarization signature differs from what
+# DiariZen subclasses. Pin numpy<2 (the fork uses np.NaN) and torch 2.6 (cp313 + arm64
+# wheels exist; older tags don't ship cp313 wheels for our dev env).
+ARG DIARIZEN_REF=main
+RUN --mount=type=cache,target=/root/.cache/uv \
+    git clone --depth 1 --branch "${DIARIZEN_REF}" https://github.com/BUTSpeechFIT/DiariZen /tmp/DiariZen \
+    && uv pip install --python /opt/venv/bin/python \
+        "torch==2.6.0" "torchaudio==2.6.0" "numpy<2" "accelerate" "toml" \
+        "/tmp/DiariZen/pyannote-audio" "/tmp/DiariZen" \
+    && rm -rf /tmp/DiariZen
 
 COPY . .
 
@@ -43,7 +56,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
-    curl
+    curl \
+    ffmpeg
 
 RUN groupadd --gid 1000 appgroup \
     && useradd --uid 1000 --gid appgroup --shell /bin/bash --create-home appuser \

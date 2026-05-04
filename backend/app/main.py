@@ -19,6 +19,7 @@ from app.meeting.routers.meeting import router as meeting_router
 from app.participant.router import router as participant_router
 from app.tasks import broker
 from app.transcript.router import router as transcript_router
+from app.upload.router import router as upload_router
 
 
 @asynccontextmanager
@@ -57,6 +58,7 @@ app.add_middleware(
 )
 
 app.include_router(meeting_router)
+app.include_router(upload_router)
 app.include_router(ingest_router)
 app.include_router(transcript_router)
 app.include_router(participant_router)

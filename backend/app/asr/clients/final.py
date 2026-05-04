@@ -39,10 +39,11 @@ class FasterWhisperClient:
             )
         return self._model
 
-    def transcribe(self, wav_bytes: bytes) -> list[ASRSegment]:
+    def transcribe(self, audio: str | bytes) -> list[ASRSegment]:
         model = self._ensure_model()
+        source = audio if isinstance(audio, str) else io.BytesIO(audio)
         segments_iter, _ = model.transcribe(
-            io.BytesIO(wav_bytes),
+            source,
             language=config.asr.FINAL_LANGUAGE,
             word_timestamps=True,
             vad_filter=False,
@@ -78,3 +79,6 @@ class FasterWhisperClient:
                 )
             )
         return segments
+
+
+faster_whisper_client = FasterWhisperClient()

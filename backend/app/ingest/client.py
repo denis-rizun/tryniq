@@ -43,10 +43,31 @@ class MinioClient:
             async with response["Body"] as stream:
                 return await stream.read()
 
+    async def put_file(self, key: str, path: str, content_type: str) -> None:
+        async with self._get_client() as client:
+            await client.upload_file(
+                Filename=path,
+                Bucket=config.minio.BUCKET,
+                Key=key,
+                ExtraArgs={"ContentType": content_type},
+            )
+
+    async def download_to(self, key: str, path: str) -> None:
+        async with self._get_client() as client:
+            await client.download_file(Bucket=config.minio.BUCKET, Key=key, Filename=path)
+
+    async def delete_object(self, key: str) -> None:
+        async with self._get_client() as client:
+            await client.delete_object(Bucket=config.minio.BUCKET, Key=key)
+
     @staticmethod
     def get_stream_object_key(meeting_id: UUID, stream_id: UUID, part: int = 1) -> str:
         suffix = "" if part == 1 else f".part{part}"
         return f"meetings/{meeting_id}/streams/{stream_id}{suffix}.wav"
+
+    @staticmethod
+    def get_upload_source_key(meeting_id: UUID, ext: str) -> str:
+        return f"meetings/{meeting_id}/uploaded/source.{ext}"
 
     @asynccontextmanager
     async def _get_client(self) -> AsyncGenerator[S3Client]:

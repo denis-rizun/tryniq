@@ -28,12 +28,20 @@ dependencies = [
     "anthropic>=0.40.0",
     "openai>=1.55.0",
     "mistralai>=2.3.1",
+    "python-multipart>=0.0.20",
 ]
 
 [project.optional-dependencies]
 mlx = [
     "parakeet-mlx>=0.3.0",
 ]
+# Diarization is provided by DiariZen (BUT-FIT). Installed manually — DiariZen ships
+# its own forked pyannote-audio in-tree, and upstream PyPI pyannote.audio is NOT
+# compatible. Local install:
+#   git clone https://github.com/BUTSpeechFIT/DiariZen /tmp/DiariZen
+#   uv pip install "torch==2.6.0" "torchaudio==2.6.0" "numpy<2" "accelerate"
+#   uv pip install /tmp/DiariZen/pyannote-audio /tmp/DiariZen
+# Backend gracefully falls back to single-cluster if any of the above is missing.
 
 [dependency-groups]
 dev = [

@@ -10,6 +10,7 @@ from app.core.config import BASE_MODEL_CONFIG
 from app.graph.config import GraphSettings
 from app.ingest.config import MinioSettings
 from app.meeting.config import RedisSettings
+from app.upload.config import UploadSettings
 
 
 class APISettings(BaseSettings):
@@ -68,6 +69,7 @@ class Settings(BaseSettings):
     redis: RedisSettings = Field(default_factory=RedisSettings)
     asr: ASRSettings = Field(default_factory=ASRSettings)
     graph: GraphSettings = Field(default_factory=GraphSettings)
+    upload: UploadSettings = Field(default_factory=UploadSettings)
 
     @classmethod
     @lru_cache

@@ -9,7 +9,7 @@ case "$1" in
     exec alembic upgrade head
     ;;
   worker)
-    exec taskiq worker app.tasks:broker
+    exec taskiq worker app.tasks:broker --workers "${TASKIQ_WORKERS:-1}"
     ;;
   *)
     exec "$@"
