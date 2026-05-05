@@ -18,8 +18,8 @@ branch_labels = None
 depends_on = None
 
 
-chat_scope = postgresql.ENUM("meeting", "all", name="chatscope", create_type=False)
-chat_role = postgresql.ENUM("user", "assistant", name="chatrole", create_type=False)
+chat_scope = postgresql.ENUM("MEETING", "ALL", name="chatscope", create_type=False)
+chat_role = postgresql.ENUM("USER", "ASSISTANT", name="chatrole", create_type=False)
 
 
 def upgrade() -> None:
