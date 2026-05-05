@@ -28,10 +28,6 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev --python python3
 
-# DiariZen ships its own pyannote-audio fork (in-tree at pyannote-audio/). Upstream
-# pyannote PyPI does NOT work — its SpeakerDiarization signature differs from what
-# DiariZen subclasses. Pin numpy<2 (the fork uses np.NaN) and torch 2.6 (cp313 + arm64
-# wheels exist; older tags don't ship cp313 wheels for our dev env).
 ARG DIARIZEN_REF=main
 RUN --mount=type=cache,target=/root/.cache/uv \
     git clone --depth 1 --branch "${DIARIZEN_REF}" https://github.com/BUTSpeechFIT/DiariZen /tmp/DiariZen \
