@@ -200,7 +200,7 @@ If a feature has multiple routers, use `routers/` package (see `app/meeting/rout
   async def transcribe_final(meeting_id: str, stream_id: str) -> None:
       async with async_session() as session:
           service = FinalASRService(ParticipantService(session), ...)
-          await service.run(UUID(meeting_id), UUID(stream_id))
+          await service.extract_metadata(UUID(meeting_id))
   ```
 
 - Enqueue with `await some_task.kiq(...)` from the API process.
@@ -266,7 +266,68 @@ If a feature has multiple routers, use `routers/` package (see `app/meeting/rout
 
 ---
 
-## 18. When you're not sure
+## 18. AI client (OpenAI + Langfuse)
+
+OpenAI is the **only** commercial LLM/embedding provider. Do not import `anthropic`, `mistralai`, or any other vendor SDK in `app/`. Live ASR and post-meeting ASR are out of scope for this rule (they live in `app/asr/`).
+
+- **One client, in `app/core/client.py`.** `AIClient` wraps a single `langfuse.openai.AsyncOpenAI`. Reach it through `get_ai_client()` (`@lru_cache(maxsize=1)`). Never instantiate `AsyncOpenAI`, `LangfuseAsyncOpenAI`, or `Langfuse` directly in feature code.
+- **Two-line usage at every call site.** Resolve the singleton on its own line, then invoke a method:
+
+  ```python
+  ai_client = get_ai_client()
+  response = await ai_client.complete_structured(request)
+  ```
+
+  Do not chain `await get_ai_client().method(...)` — it hides the dependency and is harder to mock.
+- **Public attributes on the client.** `AIClient.openai`, `AIClient.langfuse`. No leading-underscore state on classes that exist to be collaborated with — reserve `_` for true internal helpers.
+- **Eager construction.** The client builds its OpenAI handle in `__init__`, not lazily on first use. Langfuse is always on; there is no `LANGFUSE_ENABLED` flag. If a deployment doesn't want tracing, it doesn't ship Langfuse keys — the SDK no-ops in that case.
+
+### 18.1 Method arguments — dataclasses, not arg lists (only if ther eis )
+
+- **No `*` keyword-only enforcement** on client methods. The dataclass already names every field — `*` would be redundant noise.
+- Each request carries a `kind: str` — used both as the OpenAI `json_schema.name` and as the structured-log key. **Never use `dto.__name__`** for either purpose; `kind` is the identity of the call.
+
+### 18.2 Errors
+
+`AIValidationError` (in `app/core/exceptions.py`) inherits from `ValueError`. The semantic fit: the AI returned a value that didn't validate, mirroring Pydantic v2's own `ValidationError(ValueError)` lineage. **Do not** make it an `AppError` subclass — the AI is called from background tasks and inner retry loops, not directly from an HTTP handler, so HTTP status mapping is wrong.
+
+`AIValidationError` carries `kind`, `detail`, and an optional `raw` payload (the unparsable model output) for log-level diagnosis. Callers that want to retry catch `AIValidationError` specifically.
+
+### 18.3 Structured outputs (OpenAI strict mode)
+
+When you want a typed object back, call `complete_structured(request)` with a JSON schema and a Pydantic DTO. The client uses `response_format={"type":"json_schema","json_schema":{..., "strict": true}}` and validates into the DTO at the boundary.
+
+Strict-mode constraints — apply to every schema:
+
+- Every object: `additionalProperties: false`.
+- Every declared property listed in `required`. Express "optional" as a nullable union (`{"type": ["string", "null"]}`), not by omitting from `required`.
+- **Forbidden keywords (strict rejects them):** `minItems`, `maxItems`, `pattern`, `format`, `minLength`, `maxLength`. If you need a `min_length=1` constraint, declare it on the **Pydantic DTO** (`Field(min_length=1)`) and let the client raise `AIValidationError` when the model violates it — the retry loop handles it.
+
+### 18.4 Where things live
+
+- **Prompts and request dataclasses**: `app/core/constants.py` (interim home until Langfuse-managed prompts land). Prompt names: `<DOMAIN>_SYSTEM_PROMPT`, `<DOMAIN>_TEMPLATE`. The request bags (`StructuredRequest`, `ChatRequest`) live here too — they are the contract every caller speaks to `AIClient`.
+- **JSON schemas + value lists** (e.g. `GRAPH_OPS_JSON_SCHEMA`, `METADATA_JSON_SCHEMA`, `NODE_TYPE_VALUES`): `<feature>/constants.py`. **Not** in `schemas.py` — `schemas.py` is for Pydantic DTOs only.
+- **Settings**: a single `AISettings` block in `app/config.py` (env prefix `AI_`) holds the OpenAI key, default model, embed model, max tokens, and Langfuse credentials. Per-feature `<feature>/config.py` holds only model overrides (e.g. `GRAPH_LLM_MODEL`) and behavior knobs — **never** API keys.
+
+### 18.5 StrEnum and Pydantic conveniences
+
+- **Don't `.value` a `StrEnum`.** A `StrEnum` member *is* a string; `json.dumps` and OpenAI's schema serializer both honor that. Write `"enum": list(NodeStatus)`, not `[s.value for s in NodeStatus]`.
+- **Declarative input cleanup over per-class validators.** When several DTOs need the same pre-parse transform (e.g. drop `null` keys from a dict), define one `BeforeValidator` and an `Annotated` alias, then reuse it as a type:
+
+  ```python
+  def _without_nulls(value: object) -> object:
+      if isinstance(value, dict):
+          return {k: v for k, v in value.items() if v is not None}
+      return value
+
+  NodeFields = Annotated[dict, BeforeValidator(_without_nulls)]
+  ```
+
+  Do not duplicate `@field_validator(..., mode="before")` decorators across sibling classes for the same logic.
+
+---
+
+## 19. When you're not sure
 
 1. Find the closest existing example in the codebase (the modules under `app/meeting/`, `app/participant/`, `app/transcript/`, `app/ingest/`, `app/asr/` are the canonical references).
 2. Mirror it exactly — names, layout, helpers, log style.
