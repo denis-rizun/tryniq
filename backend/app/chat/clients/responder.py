@@ -148,7 +148,7 @@ def _format_date(dt: datetime) -> str:
 
 
 def _build_langfuse_kwargs(scope: ChatScope, session_id: UUID | None) -> dict:
-    kwargs: dict = {"name": "chat.stream_answer", "metadata": {"scope": str(scope)}, "tags": ["chat", str(scope)]}
+    metadata: dict = {"scope": str(scope), "tags": ["chat", str(scope)]}
     if session_id:
-        kwargs["session_id"] = str(session_id)
-    return kwargs
+        metadata["session_id"] = str(session_id)
+    return {"name": "chat.stream_answer", "metadata": metadata}
