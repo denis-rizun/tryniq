@@ -9,7 +9,7 @@ import { Topbar } from '@/components/shell/topbar';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Tryniq — Production deploy debrief',
+  title: 'tryniq',
 };
 
 export const viewport: Viewport = {
