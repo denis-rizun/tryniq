@@ -7,7 +7,7 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import config
-from app.graph.clients.embeddings import get_embedding_client
+from app.core.client import get_ai_client
 from app.graph.constants import GROUNDED_NODE_TYPES, EdgeType, NodeStatus, NodeType
 from app.graph.exceptions import InvalidGraphOperationError, UngroundedExtractionError, UnknownUtteranceRefError
 from app.graph.models import GraphEdge, GraphNode
@@ -21,6 +21,7 @@ from app.graph.schemas import (
     GraphResponse,
     UpdateNodeOperation,
 )
+from app.participant.models import Participant
 from app.transcript.models import Utterance
 
 logger = structlog.get_logger()
@@ -91,7 +92,7 @@ class GraphService:
         )
 
     async def ensure_utterance_node(self, meeting_id: UUID, utterance: Utterance) -> GraphNode:
-        node_id = self._utterance_node_id(utterance.id)
+        node_id = self._get_utterance_node_id(utterance.id)
         existing = (await self.session.exec(select(GraphNode).where(GraphNode.id == node_id))).one_or_none()
         if existing:
             return existing
@@ -119,15 +120,41 @@ class GraphService:
         return node
 
     @staticmethod
-    def _utterance_node_id(utterance_id: UUID) -> UUID:
+    def _get_utterance_node_id(utterance_id: UUID) -> UUID:
         return uuid5(NAMESPACE_OID, f"utterance:{utterance_id}")
 
     @staticmethod
-    def _meeting_node_id(meeting_id: UUID) -> UUID:
+    def get_meeting_node_id(meeting_id: UUID) -> UUID:
         return uuid5(NAMESPACE_OID, f"meeting:{meeting_id}")
 
+    @staticmethod
+    def _get_person_node_id(participant_id: UUID) -> UUID:
+        return uuid5(NAMESPACE_OID, f"person:{participant_id}")
+
+    async def ensure_person_node(self, meeting_id: UUID, participant: Participant) -> GraphNode:
+        node_id = self._get_person_node_id(participant.id)
+        existing = (await self.session.exec(select(GraphNode).where(GraphNode.id == node_id))).one_or_none()
+        if existing:
+            return existing
+
+        fields = {"name": participant.name, "participant_id": str(participant.id)}
+        stmt = (
+            pg_insert(GraphNode)
+            .values(
+                id=node_id,
+                meeting_id=meeting_id,
+                type=NodeType.PERSON,
+                fields=fields,
+                status=NodeStatus.CONFIRMED,
+            )
+            .on_conflict_do_nothing(index_elements=["id"])
+        )
+        await self.session.exec(stmt)
+        node = (await self.session.exec(select(GraphNode).where(GraphNode.id == node_id))).one()
+        return node
+
     async def ensure_meeting_node(self, meeting_id: UUID) -> GraphNode:
-        node_id = self._meeting_node_id(meeting_id)
+        node_id = self.get_meeting_node_id(meeting_id)
         existing = (await self.session.exec(select(GraphNode).where(GraphNode.id == node_id))).one_or_none()
         if existing:
             return existing
@@ -189,8 +216,8 @@ class GraphService:
         if not non_empty_indices:
             return [None] * len(node_operations)
 
-        embedding_client = get_embedding_client()
-        vectors = await embedding_client.embed_many([texts[i] for i in non_empty_indices])
+        ai_client = get_ai_client()
+        vectors = await ai_client.embed([texts[i] for i in non_empty_indices])
         result: list[list[float] | None] = [None] * len(node_operations)
         for i, vec in zip(non_empty_indices, vectors, strict=True):
             result[i] = vec
@@ -204,7 +231,7 @@ class GraphService:
         embedding: list[float] | None,
     ) -> GraphNode:
         if embedding is not None:
-            existing = await self._dedup_node(meeting_id, operation.node_type, embedding)
+            existing = await self.dedup_node(meeting_id, operation.node_type, embedding)
             if existing is not None:
                 return existing
 
@@ -292,7 +319,7 @@ class GraphService:
         if ref in short_refs:
             uid = short_refs[ref]
             if uid == meeting_id:
-                return self._meeting_node_id(meeting_id)
+                return self.get_meeting_node_id(meeting_id)
             if uid in utterance_lookup:
                 node = await self.ensure_utterance_node(meeting_id, utterance_lookup[uid])
                 return node.id
@@ -303,7 +330,7 @@ class GraphService:
             raise InvalidGraphOperationError() from e
 
         if uid == meeting_id:
-            return self._meeting_node_id(meeting_id)
+            return self.get_meeting_node_id(meeting_id)
 
         if uid in utterance_lookup:
             node = await self.ensure_utterance_node(meeting_id, utterance_lookup[uid])
@@ -319,7 +346,7 @@ class GraphService:
 
         return existing.id
 
-    async def _dedup_node(
+    async def dedup_node(
         self,
         meeting_id: UUID,
         node_type: NodeType,
@@ -350,7 +377,6 @@ class GraphService:
             if isinstance(value, str) and value.strip():
                 return value
         return ""
-
 
 def _cosine_distance(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b, strict=False))

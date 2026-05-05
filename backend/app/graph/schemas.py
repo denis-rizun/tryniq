@@ -2,17 +2,26 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import Field, TypeAdapter
+from pydantic import BeforeValidator, Field, TypeAdapter
 
 from app.core.base_schema import BaseSchema
 from app.graph.constants import EdgeType, GraphOperationKind, NodeStatus, NodeType
 from app.meeting.constants import MeetingEventKind
 
 
+def _without_nulls(value: object) -> object:
+    if isinstance(value, dict):
+        return {k: v for k, v in value.items() if v is not None}
+    return value
+
+
+NodeFields = Annotated[dict, BeforeValidator(_without_nulls)]
+
+
 class AddNodeOperation(BaseSchema):
     op: Literal[GraphOperationKind.ADD_NODE] = GraphOperationKind.ADD_NODE
     node_type: NodeType
-    fields: dict
+    fields: NodeFields
     temp_id: str
     status: NodeStatus = NodeStatus.PROVISIONAL
 
@@ -26,17 +35,20 @@ class AddEdgeOperation(BaseSchema):
     to_ref: str = Field(alias="to")
 
 
-
 class UpdateNodeOperation(BaseSchema):
     op: Literal[GraphOperationKind.UPDATE_NODE] = GraphOperationKind.UPDATE_NODE
     id: str
-    fields: dict | None = None
+    fields: NodeFields | None = None
     status: NodeStatus | None = None
 
 
 type GraphOperation = Annotated[AddNodeOperation | AddEdgeOperation | UpdateNodeOperation, Field(discriminator="op")]
 GRAPH_OPERATION_ADAPTER: TypeAdapter[GraphOperation] = TypeAdapter(GraphOperation)
 GRAPH_OPERATIONS_ADAPTER: TypeAdapter[list[GraphOperation]] = TypeAdapter(list[GraphOperation])
+
+
+class GraphOperationsResponse(BaseSchema):
+    ops: list[GraphOperation] = Field(default_factory=list)
 
 
 class GraphNodeRead(BaseSchema):
