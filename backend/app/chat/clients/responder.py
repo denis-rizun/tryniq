@@ -1,0 +1,179 @@
+import re
+from collections.abc import AsyncIterator
+from datetime import datetime
+from uuid import UUID
+
+import structlog
+from langfuse import Langfuse
+from langfuse.openai import AsyncOpenAI as LangfuseAsyncOpenAI
+from openai import AsyncOpenAI
+
+from app.chat.clients.prompt_builder import PromptBuilder
+from app.chat.constants import (
+    CROSS_LABEL_MAX_LEN,
+    GRAPH_REF_PATTERN,
+    REF_PATTERN,
+    AnswerComplete,
+    AnswerDelta,
+    AnswerEvent,
+    AnswerHistoryMessage,
+    ChatScope,
+    RetrievedContext,
+    UtteranceHit,
+)
+from app.chat.schemas import ChatCitation
+from app.config import config
+
+logger = structlog.get_logger()
+
+
+class ChatResponder:
+    def __init__(self, prompt_builder: PromptBuilder) -> None:
+        self._client: AsyncOpenAI | LangfuseAsyncOpenAI | None = None
+        self._langfuse: Langfuse | None = None
+        self._prompt_builder = prompt_builder
+
+    @property
+    def client(self) -> AsyncOpenAI | LangfuseAsyncOpenAI:
+        if not self._client:
+            api_key = config.chat.OPENAI_API_KEY.get_secret_value()
+            if config.chat.LANGFUSE_ENABLED:
+                self._configure_langfuse()
+                self._client = LangfuseAsyncOpenAI(api_key=api_key)
+            else:
+                self._client = AsyncOpenAI(api_key=api_key)
+        return self._client
+
+    def _configure_langfuse(self) -> None:
+        if self._langfuse:
+            return
+
+        self._langfuse = Langfuse(
+            public_key=config.chat.LANGFUSE_PUBLIC_KEY.get_secret_value(),
+            secret_key=config.chat.LANGFUSE_SECRET_KEY.get_secret_value(),
+            host=config.chat.LANGFUSE_HOST,
+        )
+
+    async def stream_answer(
+        self,
+        query: str,
+        scope: ChatScope,
+        history: list[AnswerHistoryMessage],
+        context: RetrievedContext,
+        session_id: UUID | None = None,
+    ) -> AsyncIterator[AnswerEvent]:
+        system_prompt = self._prompt_builder.build_system_prompt(scope, context)
+        messages = self._prompt_builder.build_messages(system_prompt, history, query)
+
+        model = config.chat.LLM_MODEL
+        full_text = ""
+        stream = await self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=config.chat.MAX_OUTPUT_TOKENS,
+            stream=True,
+            **self._get_langfuse_kwargs(scope, session_id),
+        )
+        async for chunk in stream:
+            if not chunk.choices:
+                continue
+
+            delta = chunk.choices[0].delta.content or ""
+            if not delta:
+                continue
+
+            full_text += delta
+            yield AnswerDelta(text=delta)
+
+        rendered_text, citations = self._finalize(full_text, scope, context)
+        yield AnswerComplete(text=rendered_text, citations=citations, model=model)
+
+    @staticmethod
+    def _get_langfuse_kwargs(scope: ChatScope, session_id: UUID | None) -> dict:
+        if not config.chat.LANGFUSE_ENABLED:
+            return {}
+
+        kwargs: dict = {"name": "chat.stream_answer", "metadata": {"scope": str(scope)}, "tags": ["chat", str(scope)]}
+        if session_id:
+            kwargs["session_id"] = str(session_id)
+        return kwargs
+
+    @staticmethod
+    def _finalize(
+        text: str,
+        scope: ChatScope,
+        context: RetrievedContext,
+    ) -> tuple[str, list[ChatCitation]]:
+        ref_to_hit = {hit.ref: hit for hit in context.utterances}
+        used: dict[UUID, ChatCitation] = {}
+        order: list[UUID] = []
+
+        def add(hit: UtteranceHit) -> str:
+            label = _format_citation_label(scope, hit)
+            if hit.utterance_id not in used:
+                used[hit.utterance_id] = ChatCitation(
+                    utterance_id=hit.utterance_id,
+                    meeting_id=hit.meeting_id,
+                    meeting_title=hit.meeting_title,
+                    meeting_started_at=hit.meeting_started_at,
+                    t_start=hit.t_start,
+                    t_end=hit.t_end,
+                    speaker=hit.speaker,
+                    text=hit.text,
+                    label=label,
+                )
+                order.append(hit.utterance_id)
+            return label
+
+        def replace_u(match: re.Match[str]) -> str:
+            hit = ref_to_hit.get(match.group(1))
+            if not hit:
+                return ""
+            return f"[{add(hit)}]"
+
+        label_to_hit: dict[str, UtteranceHit] = {}
+        for hit in context.utterances:
+            label_to_hit[_format_citation_label(scope, hit)] = hit
+            label_to_hit[format_mmss(hit.t_start)] = hit
+
+        def replace_bare(match: re.Match[str]) -> str:
+            label = match.group(1).strip()
+            hit = label_to_hit.get(label)
+            if not hit:
+                return f"[{label}]"
+            return f"[{add(hit)}]"
+
+        rendered = REF_PATTERN.sub(replace_u, text)
+        rendered = GRAPH_REF_PATTERN.sub("", rendered)
+        if label_to_hit:
+            bare_alts = sorted({re.escape(k) for k in label_to_hit}, key=len, reverse=True)
+            bare_pattern = re.compile(r"\[(" + "|".join(bare_alts) + r")\]")
+            rendered = bare_pattern.sub(replace_bare, rendered)
+        rendered = re.sub(r"[ \t]+\.", ".", rendered)
+        rendered = re.sub(r"\s+\n", "\n", rendered)
+        rendered = rendered.strip()
+        citations = [used[uid] for uid in order]
+        return rendered, citations
+
+
+def format_mmss(t: float) -> str:
+    total = max(0, int(t))
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def _format_citation_label(scope: ChatScope, hit: UtteranceHit) -> str:
+    if scope == ChatScope.MEETING:
+        return format_mmss(hit.t_start)
+
+    title = (hit.meeting_title or "").strip()
+    if title:
+        if len(title) > CROSS_LABEL_MAX_LEN:
+            return title[: CROSS_LABEL_MAX_LEN - 1].rstrip() + "…"
+        return title
+    if hit.meeting_started_at:
+        return _format_date(hit.meeting_started_at)
+    return format_mmss(hit.t_start)
+
+
+def _format_date(dt: datetime) -> str:
+    return dt.date().isoformat()
