@@ -240,6 +240,9 @@ If a feature has multiple routers, use `routers/` package (see `app/meeting/rout
 - String quoting: double quotes are the norm (ruff `Q` rule). Single quotes only inside an f-string when needed.
 - Prefer `pathlib.Path` over `os.path`. Prefer `enum.StrEnum` over string literals for closed sets.
 - Prefer early returns over nested `else` branches.
+- Truthy checks for non-numeric / non-string types: prefer `if not x` / `if x` over `if x is None` / `if x is not None` for objects, models, collections, UUIDs, datetimes, and other reference types — it reads cleaner. Reserve `is None` for primitives where a falsy non-None value (`0`, `0.0`, `""`, `False`) is a meaningful, distinct case from absence.
+- Inject collaborators via `__init__`; do not instantiate them inside the class. Constructor parameters are required and typed; no `dep: Foo | None = None` "optional" placeholders that fall back to `Foo()`. The composition root (FastAPI dependency factories in `<feature>/dependencies.py`, or the task body) owns construction. This keeps classes testable and the wiring explicit.
+- Per-function size cap: keep functions under ~80 lines of code. If you cross that, split into helpers; method names paired with `_StreamResult`-style local dataclasses are preferable to long inline state.
 
 ---
 
