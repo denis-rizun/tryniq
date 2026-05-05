@@ -93,13 +93,23 @@ export interface MeetingListItem {
   qCount: number;
 }
 
+export interface ChatCitationView {
+  utteranceId: string;
+  meetingId: string;
+  meetingStartedAt: string | null;
+  tStart: number;
+  label: string;
+}
+
 export interface ChatMessage {
+  id?: string;
   role: 'user' | 'asst';
   text: string;
   model?: string;
   sources?: number;
   latency?: string;
-  _animate?: boolean;
+  citations?: ChatCitationView[];
+  pending?: boolean;
 }
 
 export interface ChatSession {
