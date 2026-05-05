@@ -1,3 +1,4 @@
+import { useModels } from '@/lib/hooks/use-models';
 import { STAGES } from './upload-stages';
 
 interface ProgressProps {
@@ -5,7 +6,21 @@ interface ProgressProps {
   onCancel: () => void;
 }
 
-export const UploadProgress = ({ stage, onCancel }: ProgressProps) => (
+const NOTES_STAGE_LABEL = 'Generating notes';
+const TRANSCRIBING_STAGE_LABEL = 'Transcribing';
+
+export const UploadProgress = ({ stage, onCancel }: ProgressProps) => {
+  const { data: models } = useModels();
+  const stages = STAGES.map((s) => {
+    if (s.label === NOTES_STAGE_LABEL && models?.metadata.model) {
+      return { ...s, detail: models.metadata.model };
+    }
+    if (s.label === TRANSCRIBING_STAGE_LABEL && models?.asr_final.model) {
+      return { ...s, detail: models.asr_final.model };
+    }
+    return s;
+  });
+  return (
   <div
     style={{
       background: 'var(--color-paper-lift)',
@@ -20,7 +35,7 @@ export const UploadProgress = ({ stage, onCancel }: ProgressProps) => (
     >
       standup-2026-05-11.m4a · 24.8 MB
     </div>
-    {STAGES.map((s, i) => {
+    {stages.map((s, i) => {
       const done = stage > i;
       const active = stage === i;
       return (
@@ -60,4 +75,5 @@ export const UploadProgress = ({ stage, onCancel }: ProgressProps) => (
       </button>
     </div>
   </div>
-);
+  );
+};
