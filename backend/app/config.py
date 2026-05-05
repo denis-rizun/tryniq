@@ -6,6 +6,7 @@ from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.asr.config import ASRSettings
+from app.chat.config import ChatSettings
 from app.core.config import BASE_MODEL_CONFIG
 from app.graph.config import GraphSettings
 from app.ingest.config import MinioSettings
@@ -69,6 +70,7 @@ class Settings(BaseSettings):
     redis: RedisSettings = Field(default_factory=RedisSettings)
     asr: ASRSettings = Field(default_factory=ASRSettings)
     graph: GraphSettings = Field(default_factory=GraphSettings)
+    chat: ChatSettings = Field(default_factory=ChatSettings)
     upload: UploadSettings = Field(default_factory=UploadSettings)
 
     @classmethod
