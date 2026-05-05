@@ -17,6 +17,8 @@ export interface MeetingResponse {
   status: MeetingStatus;
   started_at: string;
   ended_at: string | null;
+  summary: string | null;
+  metadata_generated_at: string | null;
 }
 
 export interface ParticipantResponse {
@@ -60,7 +62,8 @@ export interface MeetingLifecycleEvent {
     | 'transcribing'
     | 'finalizing'
     | 'final'
-    | 'failed';
+    | 'failed'
+    | 'metadata_ready';
   timestamp: string;
 }
 
@@ -226,3 +229,60 @@ export type ChatStreamEvent =
   | ChatStreamToken
   | ChatStreamCompleted
   | ChatStreamError;
+
+// --- post-meeting metadata projection ---
+
+export interface DecisionProjection {
+  id: string;
+  text: string;
+  status: GraphNodeStatusBackend;
+  owner_name: string | null;
+  source_t_start: number | null;
+  source_utterance_id: string | null;
+  topic_ids: string[];
+}
+
+export interface ActionItemProjection {
+  id: string;
+  text: string;
+  status: GraphNodeStatusBackend;
+  due_date: string | null;
+  owner_name: string | null;
+  source_t_start: number | null;
+  source_utterance_id: string | null;
+  topic_ids: string[];
+}
+
+export interface OpenQuestionProjection {
+  id: string;
+  text: string;
+  status: GraphNodeStatusBackend;
+  source_t_start: number | null;
+  source_utterance_id: string | null;
+  topic_ids: string[];
+}
+
+export interface TopicProjection {
+  id: string;
+  name: string;
+  summary: string | null;
+  relates_previous: boolean;
+}
+
+export interface RelatedMeetingProjection {
+  id: string;
+  title: string;
+  started_at: string;
+  shared_topic_names: string[];
+}
+
+export interface MeetingMetadataResponse {
+  meeting_id: string;
+  summary: string | null;
+  metadata_generated_at: string | null;
+  decisions: DecisionProjection[];
+  action_items: ActionItemProjection[];
+  open_questions: OpenQuestionProjection[];
+  topics: TopicProjection[];
+  related_meetings: RelatedMeetingProjection[];
+}

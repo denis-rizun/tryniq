@@ -1,6 +1,11 @@
 import { config } from '@/lib/config';
 import { ApiError, apiGet, apiPatch } from './client';
-import type { GraphResponse, MeetingResponse, TranscriptResponse } from './types';
+import type {
+  GraphResponse,
+  MeetingMetadataResponse,
+  MeetingResponse,
+  TranscriptResponse,
+} from './types';
 
 export interface UploadResponse {
   meeting_id: string;
@@ -31,3 +36,6 @@ export const renameMeeting = (id: string, title: string) =>
   apiPatch<MeetingResponse>(`/meetings/${id}`, { title });
 
 export const getMeetingGraph = (id: string) => apiGet<GraphResponse>(`/meetings/${id}/graph`);
+
+export const getMeetingMetadata = (id: string) =>
+  apiGet<MeetingMetadataResponse>(`/meetings/${id}/metadata`);

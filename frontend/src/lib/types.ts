@@ -67,16 +67,15 @@ export interface Meeting {
   durationLive?: string | null;
   participants: string[];
   state: 'live' | 'finalizing' | 'final';
-  asrModel: string;
-  llmModel: string;
   utterances: Utterance[];
   decisions: Decision[];
   actionItems: ActionItem[];
   questions: OpenQuestion[];
   topics: Topic[];
   speakingTime: Record<string, number>;
-  previousMeeting: PreviousMeeting;
+  previousMeetings: PreviousMeeting[];
   summary: string;
+  metadataGeneratedAt: string | null;
 }
 
 export interface MeetingListItem {

@@ -112,15 +112,14 @@ export const meeting: Meeting = {
   durationLive: '14:23',
   participants: ['sarah', 'mike', 'anna'],
   state: 'live',
-  asrModel: 'whisper-large-v3',
-  llmModel: 'claude-haiku-4.5',
   utterances,
   decisions,
   actionItems,
   questions,
   topics,
   speakingTime: { sarah: 38, mike: 35, anna: 27 },
-  previousMeeting,
+  previousMeetings: [previousMeeting],
+  metadataGeneratedAt: null,
   summary:
     'Production deploy to eu-west-1 returned 502s on roughly 30% of card-auth traffic at 04:12 UTC. After two minutes of degraded checkout the team rolled back to last-known-good; eu-west-1 has been confirmed stable since 05:01 UTC. The blast radius was contained because us-east-1 and ap-southeast had not yet been fanned out to.\n\nDiscussion focused on whether faster rollback should be automated and whether the payment-flow regression suite has the right coverage. Mike owns the migration-script investigation and the CI-history pull; Sarah will draft the customer postmortem. One owner-less decision was captured around improving canary monitoring.',
 };

@@ -1,20 +1,31 @@
 import { formatDuration, formatTimestamp, pad2 } from '@/lib/format';
 import type {
+  ActionItem,
   ChatCitationView,
   ChatMessage as ChatMessageView,
   ChatSession as ChatSessionView,
+  Decision,
   Meeting,
   MeetingListItem,
+  OpenQuestion,
   PeopleMap,
+  PreviousMeeting,
+  Topic,
   Utterance,
 } from '@/lib/types';
 import type {
+  ActionItemProjection,
   ChatCitation,
   ChatMessageResponse,
   ChatSessionDetailResponse,
   ChatSessionResponse,
+  DecisionProjection,
+  MeetingMetadataResponse,
   MeetingResponse,
   MeetingStatus,
+  OpenQuestionProjection,
+  RelatedMeetingProjection,
+  TopicProjection,
   TranscriptResponse,
   UtteranceResponse,
 } from './types';
@@ -148,21 +159,84 @@ export const toMeeting = (t: TranscriptResponse, title: string): AdaptedTranscri
     durationLive: active ? formatDuration((Date.now() - startedMs) / 1000) : null,
     participants: participantSlugs,
     state: toState(t.status),
-    asrModel: 'whisper-large-v3',
-    llmModel: 'claude-haiku-4.5',
     utterances,
-    // TODO(api): graph extraction not implemented (Phase 3)
     decisions: [],
     actionItems: [],
     questions: [],
     topics: [],
     speakingTime: {},
-    previousMeeting: { id: '', title: '', date: '', relatedTopics: [] },
+    previousMeetings: [],
     summary: '',
+    metadataGeneratedAt: null,
   };
 
   return { meeting, people, participantSlugById };
 };
+
+const formatRelatedMeetingDate = (iso: string): string => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const formatTimeOrDash = (t: number | null): string =>
+  t == null ? '—' : formatTimestamp(t);
+
+const toDecision = (d: DecisionProjection): Decision => ({
+  id: d.id,
+  text: d.text,
+  time: formatTimeOrDash(d.source_t_start),
+  owner: d.owner_name,
+  status: d.status,
+});
+
+const toActionItem = (a: ActionItemProjection): ActionItem => ({
+  id: a.id,
+  text: a.text,
+  time: formatTimeOrDash(a.source_t_start),
+  owner: a.owner_name,
+  status: a.status === 'superseded' ? 'done' : 'open',
+});
+
+const toOpenQuestion = (q: OpenQuestionProjection): OpenQuestion => ({
+  id: q.id,
+  text: q.text,
+  time: formatTimeOrDash(q.source_t_start),
+  status:
+    q.status === 'confirmed'
+      ? 'answered'
+      : q.status === 'superseded'
+        ? 'partially-answered'
+        : 'unanswered',
+});
+
+const toTopic = (t: TopicProjection): Topic => ({
+  id: t.id,
+  name: t.name,
+  summary: t.summary ?? '',
+  relatesPrevious: t.relates_previous,
+});
+
+const toPreviousMeeting = (r: RelatedMeetingProjection): PreviousMeeting => ({
+  id: r.id,
+  title: r.title,
+  date: formatRelatedMeetingDate(r.started_at),
+  relatedTopics: r.shared_topic_names,
+});
+
+export const applyMeetingMetadata = (
+  meeting: Meeting,
+  metadata: MeetingMetadataResponse,
+): Meeting => ({
+  ...meeting,
+  summary: metadata.summary ?? '',
+  metadataGeneratedAt: metadata.metadata_generated_at,
+  decisions: metadata.decisions.map(toDecision),
+  actionItems: metadata.action_items.map(toActionItem),
+  questions: metadata.open_questions.map(toOpenQuestion),
+  topics: metadata.topics.map(toTopic),
+  previousMeetings: metadata.related_meetings.map(toPreviousMeeting),
+});
 
 export const toChatCitation = (c: ChatCitation): ChatCitationView => ({
   utteranceId: c.utterance_id,
