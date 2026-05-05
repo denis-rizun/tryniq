@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.asr.router import router as asr_router
+from app.chat.router import router as chat_router
 from app.config import config
 from app.core.exceptions import register_exception_handler
 from app.db import dispose_engine
@@ -65,6 +66,7 @@ app.include_router(participant_router)
 app.include_router(events_router)
 app.include_router(asr_router)
 app.include_router(graph_router)
+app.include_router(chat_router)
 
 register_exception_handler(app)
 
