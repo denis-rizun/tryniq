@@ -9,23 +9,26 @@ Most notetakers receive a mixed audio stream and rely on diarization models to g
 
 ## Capabilities (MVP)
 
+- Per-speaker capture from Google Meet via the Chrome extension (WebRTC tap, Silero VAD-gated). *Phase 1 — done.*
 - Live transcription with sub-3s latency (Parakeet-TDT v2 in a native Swift streamer on Apple Silicon) and post-meeting refinement (faster-whisper large-v3-turbo in the Python worker). *Phase 2 — done.*
-- Live-updating knowledge graph with Cytoscape visualization and structured Markdown notes. *Phase 3 — next.*
-- Cross-meeting speaker memory via ECAPA-TDNN voice embeddings. *Phase 5.*
-- Cross-meeting topic linking via text embeddings. *Phase 5.*
-- "Chat with the meeting" RAG over transcripts with cited timestamps. *Phase 6.*
-- Markdown export for Notion / wiki / tickets. *Phase 5.*
-- Self-hostable: backend stack runs via Docker Compose; the streamer runs natively on a Mac.
+- Knowledge graph built per meeting: typed nodes (`Meeting`, `Person`, `Topic`, `Decision`, `ActionItem`, `OpenQuestion`, `Entity`, `Utterance`) with grounded `SOURCE` edges, idempotent dedup via embeddings, lifecycle states (`provisional` / `confirmed` / `superseded`). *Phase 3 — done.*
+- Post-meeting metadata projection: summary, decisions, action items, open questions, topics, and related past meetings — derived from the graph and exposed at `GET /meetings/{id}/metadata`. *Done.*
+- Cross-meeting topic linking via 384-dim text embeddings (pgvector cosine search). *Done.*
+- "Chat with the meeting" — RAG over utterance + graph embeddings with cited timestamps, scoped to a single meeting or all meetings, streamed via SSE. *Phase 6 — done.*
+- LLM observability and prompt management via self-hosted Langfuse v2 (single container, sharing the existing Postgres). *Done.*
+- Cross-meeting speaker memory via ECAPA-TDNN voice embeddings. *Phase 5 — pending.*
+- Markdown export for Notion / wiki / tickets. *Phase 5 — pending.*
+- Self-hostable: backend stack (api + worker + Postgres/pgvector + Redis + MinIO + Langfuse) runs via Docker Compose; the streamer runs natively on a Mac.
 
 ## Architecture
 
 Three processes (plus the browser extension and the Next.js UI):
 
 - **`backend/api`** — FastAPI under `/api/v1`. REST + ingest WebSocket (`/meetings/{m}/streams/{s}`) + the streamer registration WebSocket (`/asr/sessions`) + SSE (`/meetings/{id}/events`) + global lifecycle WS (`/events/ws`). Async, non-blocking only.
-- **`backend/worker`** — TaskIQ worker (same Docker image, different command). Owns post-meeting CPU/GPU/LLM work: today `transcribe_final` (faster-whisper); Phase 3+ adds aggregator, graph builder, speaker ID, embeddings.
+- **`backend/worker`** — TaskIQ worker (same Docker image, different command). Owns post-meeting CPU/GPU/LLM work: `transcribe_final` (faster-whisper), graph extraction, utterance + graph embeddings, metadata projection, chat retrieval indexing. Speaker ID is the remaining Phase 5 addition.
 - **`streamer/`** — Swift 6 process running live ASR (Parakeet-TDT v2 via `fluid_audio`, CoreML on Apple Silicon). Connects to the api as a WebSocket worker on `/asr/sessions`; the api forwards per-speaker PCM frames and the streamer publishes `partial` / `final` transcript events back. Multiple streamer instances may register; the api round-robins streams by lowest load. Not containerized — runs natively on a Mac.
 
-Three infra containers: **Postgres + pgvector** (meetings, utterances, participants; graph nodes/edges + embeddings in Phase 3+), **MinIO** (per-speaker WAVs + exports), **Redis** (TaskIQ broker + UI pub/sub). LLM provider is configurable; default Anthropic Claude Haiku 4.5, self-host fallback to Qwen 2.5 14B via Ollama/vLLM (Phase 3).
+Four infra containers: **Postgres + pgvector** (meetings, utterances, participants, graph nodes/edges, embeddings), **MinIO** (per-speaker WAVs + exports), **Redis** (TaskIQ broker + UI pub/sub), **Langfuse v2** (prompt management + LLM trace/cost observability, sharing the same Postgres). LLM provider is OpenAI (`gpt-4o-mini` for graph / chat / metadata, `text-embedding-3-small` for retrieval).
 
 ```
   Browser (extension)
@@ -113,4 +116,4 @@ Without a streamer connected, meetings still record cleanly to MinIO and `transc
 
 ## Status
 
-Phases 1 (capture) and 2 (live transcription) are **done**. Phase 3 (graph builder) and Phase 5 (cross-meeting memory) are next — see [`docs/PRD.md`](docs/PRD.md) §14. Target demo: 2026-05-11.
+Phase 1 (capture), Phase 2 (live transcription), Phase 3 (graph builder + metadata projection), and Phase 6 (chat RAG) are **done**. Phase 5 (cross-meeting speaker memory via ECAPA, Markdown export) is next — see [`docs/PRD.md`](docs/PRD.md) §14. Target demo: 2026-05-11.
