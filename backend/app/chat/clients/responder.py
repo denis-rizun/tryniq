@@ -4,9 +4,6 @@ from datetime import datetime
 from uuid import UUID
 
 import structlog
-from langfuse import Langfuse
-from langfuse.openai import AsyncOpenAI as LangfuseAsyncOpenAI
-from openai import AsyncOpenAI
 
 from app.chat.clients.prompt_builder import PromptBuilder
 from app.chat.constants import (
@@ -23,36 +20,15 @@ from app.chat.constants import (
 )
 from app.chat.schemas import ChatCitation
 from app.config import config
+from app.core.client import get_ai_client
+from app.core.constants import AIRequestKind, ChatRequest
 
 logger = structlog.get_logger()
 
 
 class ChatResponder:
     def __init__(self, prompt_builder: PromptBuilder) -> None:
-        self._client: AsyncOpenAI | LangfuseAsyncOpenAI | None = None
-        self._langfuse: Langfuse | None = None
-        self._prompt_builder = prompt_builder
-
-    @property
-    def client(self) -> AsyncOpenAI | LangfuseAsyncOpenAI:
-        if not self._client:
-            api_key = config.chat.OPENAI_API_KEY.get_secret_value()
-            if config.chat.LANGFUSE_ENABLED:
-                self._configure_langfuse()
-                self._client = LangfuseAsyncOpenAI(api_key=api_key)
-            else:
-                self._client = AsyncOpenAI(api_key=api_key)
-        return self._client
-
-    def _configure_langfuse(self) -> None:
-        if self._langfuse:
-            return
-
-        self._langfuse = Langfuse(
-            public_key=config.chat.LANGFUSE_PUBLIC_KEY.get_secret_value(),
-            secret_key=config.chat.LANGFUSE_SECRET_KEY.get_secret_value(),
-            host=config.chat.LANGFUSE_HOST,
-        )
+        self.prompt_builder = prompt_builder
 
     async def stream_answer(
         self,
@@ -62,19 +38,21 @@ class ChatResponder:
         context: RetrievedContext,
         session_id: UUID | None = None,
     ) -> AsyncIterator[AnswerEvent]:
-        system_prompt = self._prompt_builder.build_system_prompt(scope, context)
-        messages = self._prompt_builder.build_messages(system_prompt, history, query)
+        system_prompt = self.prompt_builder.build_system_prompt(scope, context)
+        messages = self.prompt_builder.build_messages(system_prompt, history, query)
 
+        ai_client = get_ai_client()
         model = config.chat.LLM_MODEL
-        full_text = ""
-        stream = await self.client.chat.completions.create(
-            model=model,
+        request = ChatRequest(
+            kind=AIRequestKind.CHAT_STREAM_ANSWER,
             messages=messages,
+            model=model,
             max_tokens=config.chat.MAX_OUTPUT_TOKENS,
-            stream=True,
-            **self._get_langfuse_kwargs(scope, session_id),
+            langfuse_kwargs=_build_langfuse_kwargs(scope, session_id),
         )
-        async for chunk in stream:
+
+        full_text = ""
+        async for chunk in ai_client.stream_chat(request):
             if not chunk.choices:
                 continue
 
@@ -87,16 +65,6 @@ class ChatResponder:
 
         rendered_text, citations = self._finalize(full_text, scope, context)
         yield AnswerComplete(text=rendered_text, citations=citations, model=model)
-
-    @staticmethod
-    def _get_langfuse_kwargs(scope: ChatScope, session_id: UUID | None) -> dict:
-        if not config.chat.LANGFUSE_ENABLED:
-            return {}
-
-        kwargs: dict = {"name": "chat.stream_answer", "metadata": {"scope": str(scope)}, "tags": ["chat", str(scope)]}
-        if session_id:
-            kwargs["session_id"] = str(session_id)
-        return kwargs
 
     @staticmethod
     def _finalize(
@@ -177,3 +145,10 @@ def _format_citation_label(scope: ChatScope, hit: UtteranceHit) -> str:
 
 def _format_date(dt: datetime) -> str:
     return dt.date().isoformat()
+
+
+def _build_langfuse_kwargs(scope: ChatScope, session_id: UUID | None) -> dict:
+    kwargs: dict = {"name": "chat.stream_answer", "metadata": {"scope": str(scope)}, "tags": ["chat", str(scope)]}
+    if session_id:
+        kwargs["session_id"] = str(session_id)
+    return kwargs

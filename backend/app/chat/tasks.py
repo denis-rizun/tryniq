@@ -7,8 +7,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.chat.models import UtteranceEmbedding
 from app.config import config
+from app.core.client import get_ai_client
 from app.db import async_session
-from app.graph.clients.embeddings import get_embedding_client
 from app.tasks import broker
 from app.transcript.models import Utterance
 
@@ -18,7 +18,7 @@ logger = structlog.get_logger()
 @broker.task(retry_on_error=True, max_retries=2)
 async def embed_utterances(meeting_id: str) -> None:
     meeting_uuid = UUID(meeting_id)
-    embedding_client = get_embedding_client()
+    ai_client = get_ai_client()
     async with async_session() as session:
         pending = await _select_pending(session, meeting_uuid)
         if not pending:
@@ -31,9 +31,8 @@ async def embed_utterances(meeting_id: str) -> None:
         vectors: list[list[float]] = []
         for i in range(0, len(texts), batch_size):
             chunk = texts[i : i + batch_size]
-            vectors.extend(await embedding_client.embed_many(chunk))
+            vectors.extend(await ai_client.embed(chunk))
 
-        model = config.chat.EMBED_MODEL
         for utt, vec in zip(pending, vectors, strict=True):
             stmt = (
                 pg_insert(UtteranceEmbedding)
@@ -41,7 +40,7 @@ async def embed_utterances(meeting_id: str) -> None:
                     utterance_id=utt.id,
                     meeting_id=utt.meeting_id,
                     embedding=vec,
-                    model=model,
+                    model=config.ai.EMBED_MODEL,
                 )
                 .on_conflict_do_nothing(index_elements=["utterance_id"])
             )
@@ -52,7 +51,7 @@ async def embed_utterances(meeting_id: str) -> None:
             "utterance embeddings persisted",
             meeting_id=meeting_uuid,
             count=len(pending),
-            model=model,
+            model=config.ai.EMBED_MODEL,
         )
 
 

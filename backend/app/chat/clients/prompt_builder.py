@@ -2,11 +2,11 @@ from app.chat.clients.context_builder import ContextBuilder
 from app.chat.constants import (
     SCOPE_NOTE_ALL,
     SCOPE_NOTE_MEETING,
-    SYSTEM_PROMPT_TEMPLATE,
     AnswerHistoryMessage,
     ChatScope,
     RetrievedContext,
 )
+from app.core.constants import CHAT_SYSTEM_PROMPT_TEMPLATE
 
 
 class PromptBuilder:
@@ -16,7 +16,7 @@ class PromptBuilder:
     def build_system_prompt(self, scope: ChatScope, context: RetrievedContext) -> str:
         utterance_block, graph_block = self._context_builder.build(scope, context)
         scope_note = SCOPE_NOTE_MEETING if scope == ChatScope.MEETING else SCOPE_NOTE_ALL
-        return SYSTEM_PROMPT_TEMPLATE.format(
+        return CHAT_SYSTEM_PROMPT_TEMPLATE.format(
             scope_note=scope_note,
             utterance_block=utterance_block,
             graph_block=graph_block,

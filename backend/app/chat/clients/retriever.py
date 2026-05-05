@@ -13,7 +13,7 @@ from app.chat.constants import (
 )
 from app.chat.models import UtteranceEmbedding
 from app.config import config
-from app.graph.clients.embeddings import get_embedding_client
+from app.core.client import get_ai_client
 from app.graph.constants import NodeType
 from app.graph.models import GraphNode
 from app.meeting.constants import MeetingStatus
@@ -34,8 +34,8 @@ class ChatRetriever:
         scope: ChatScope,
         meeting_id: UUID | None,
     ) -> RetrievedContext:
-        embedding_client = get_embedding_client()
-        vectors = await embedding_client.embed_many([query])
+        ai_client = get_ai_client()
+        vectors = await ai_client.embed([query])
         if not vectors:
             return RetrievedContext(utterances=[], graph_nodes=[])
 
