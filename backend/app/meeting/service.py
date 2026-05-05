@@ -95,6 +95,7 @@ class MeetingService:
         logger.info("meeting promoted to final", meeting_id=meeting_id)
         await redis_client.publish_meeting_lifecycle(meeting.id, LifecycleEvent.FINAL)
         await self.enqueue_graph_build(meeting_id)
+        await self.enqueue_utterance_embeddings(meeting_id)
         return True
 
     @staticmethod
@@ -103,6 +104,13 @@ class MeetingService:
 
         await build_graph.kiq(str(meeting_id), None, None)
         logger.debug("enqueued build_graph", meeting_id=meeting_id)
+
+    @staticmethod
+    async def enqueue_utterance_embeddings(meeting_id: UUID) -> None:
+        from app.chat.tasks import embed_utterances
+
+        await embed_utterances.kiq(str(meeting_id))
+        logger.debug("enqueued embed_utterances", meeting_id=meeting_id)
 
     async def create_for_upload(self, title: str) -> Meeting:
         code = f"upl-{token_urlsafe(8).lower()}"

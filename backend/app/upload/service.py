@@ -96,6 +96,7 @@ class UploadService:
             await self.meeting_service.set_status(meeting_id, MeetingStatus.FINAL)
             await redis_client.publish_meeting_lifecycle(meeting_id, LifecycleEvent.FINAL)
             await MeetingService.enqueue_graph_build(meeting_id)
+            await MeetingService.enqueue_utterance_embeddings(meeting_id)
 
     async def _validate_duration(self, src_path: str) -> None:
         duration = await ffmpeg_client.probe_duration(src_path)
