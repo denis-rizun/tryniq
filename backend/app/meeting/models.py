@@ -3,7 +3,6 @@ from uuid import UUID
 
 from sqlalchemy import DateTime
 from sqlmodel import Field, Relationship, SQLModel
-from sqlmodel._compat import SQLModelConfig
 
 from app.core.database import IDMixin, TimestampMixin
 from app.meeting.constants import MeetingStatus
@@ -11,7 +10,6 @@ from app.meeting.constants import MeetingStatus
 
 class MeetingRoom(IDMixin, TimestampMixin, SQLModel, table=True):
     __tablename__ = "meeting_room"
-    model_config = SQLModelConfig(extra="allow")
 
     meet_code: str = Field(unique=True, index=True)
     title: str
@@ -19,7 +17,6 @@ class MeetingRoom(IDMixin, TimestampMixin, SQLModel, table=True):
 
 class Meeting(IDMixin, SQLModel, table=True):
     __tablename__ = "meeting"
-    model_config = SQLModelConfig(extra="allow")
 
     title: str
     status: MeetingStatus = Field(default=MeetingStatus.LIVE)

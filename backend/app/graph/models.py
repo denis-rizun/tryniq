@@ -5,7 +5,6 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import Column, DateTime
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
-from sqlmodel._compat import SQLModelConfig
 
 from app.core.database import IDMixin
 from app.graph.constants import EMBEDDING_DIM, EdgeType, NodeStatus, NodeType
@@ -13,7 +12,6 @@ from app.graph.constants import EMBEDDING_DIM, EdgeType, NodeStatus, NodeType
 
 class GraphNode(IDMixin, SQLModel, table=True):
     __tablename__ = "graph_node"
-    model_config = SQLModelConfig(extra="allow")
 
     meeting_id: UUID = Field(foreign_key="meeting.id", index=True)
     type: NodeType = Field(index=True)
@@ -29,7 +27,6 @@ class GraphNode(IDMixin, SQLModel, table=True):
 
 class GraphEdge(IDMixin, SQLModel, table=True):
     __tablename__ = "graph_edge"
-    model_config = SQLModelConfig(extra="allow")
 
     meeting_id: UUID = Field(foreign_key="meeting.id", index=True)
     type: EdgeType = Field(index=True)

@@ -3,6 +3,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, event
 from sqlmodel import Field, SQLModel
+from sqlmodel._compat import SQLModelConfig
 
 SQLModel.metadata.naming_convention = {
     "ix": "%(column_0_label)s_idx",
@@ -15,6 +16,7 @@ SQLModel.metadata.naming_convention = {
 
 class IDMixin:
     id: UUID = Field(primary_key=True, default_factory=uuid4)
+    model_config = SQLModelConfig(extra="allow")
 
 
 class TimestampMixin:

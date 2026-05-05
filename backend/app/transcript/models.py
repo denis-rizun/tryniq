@@ -3,14 +3,12 @@ from uuid import UUID
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
-from sqlmodel._compat import SQLModelConfig
 
 from app.core.database import IDMixin, TimestampMixin
 
 
 class Utterance(IDMixin, TimestampMixin, SQLModel, table=True):
     __tablename__ = "utterance"
-    model_config = SQLModelConfig(extra="allow")
 
     meeting_id: UUID = Field(foreign_key="meeting.id", index=True)
     participant_id: UUID = Field(foreign_key="participant.id", index=True)
