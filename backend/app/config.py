@@ -11,6 +11,7 @@ from app.core.config import BASE_MODEL_CONFIG
 from app.graph.config import GraphSettings
 from app.ingest.config import MinioSettings
 from app.meeting.config import RedisSettings
+from app.metadata.config import MetadataSettings
 from app.upload.config import UploadSettings
 
 
@@ -59,6 +60,17 @@ class DatabaseSettings(BaseSettings):
         )
 
 
+class AISettings(BaseSettings):
+    model_config = SettingsConfigDict(**BASE_MODEL_CONFIG, env_prefix="AI_")
+
+    OPENAI_API_KEY: SecretStr = SecretStr("")
+    PROVIDER: Literal["OpenAI"] = "OpenAI"
+    EMBED_MODEL: str = "text-embedding-3-small"
+    LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+    LANGFUSE_PUBLIC_KEY: SecretStr = SecretStr("")
+    LANGFUSE_SECRET_KEY: SecretStr = SecretStr("")
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(**BASE_MODEL_CONFIG)
 
@@ -69,7 +81,9 @@ class Settings(BaseSettings):
     minio: MinioSettings = Field(default_factory=MinioSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
     asr: ASRSettings = Field(default_factory=ASRSettings)
+    ai: AISettings = Field(default_factory=AISettings)
     graph: GraphSettings = Field(default_factory=GraphSettings)
+    metadata: MetadataSettings = Field(default_factory=MetadataSettings)
     chat: ChatSettings = Field(default_factory=ChatSettings)
     upload: UploadSettings = Field(default_factory=UploadSettings)
 
