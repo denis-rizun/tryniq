@@ -17,6 +17,7 @@ from app.logger import configure_logging
 from app.meeting.client import redis_client
 from app.meeting.routers.event import router as events_router
 from app.meeting.routers.meeting import router as meeting_router
+from app.metadata.router import router as metadata_router
 from app.participant.router import router as participant_router
 from app.tasks import broker
 from app.transcript.router import router as transcript_router
@@ -66,6 +67,7 @@ app.include_router(participant_router)
 app.include_router(events_router)
 app.include_router(asr_router)
 app.include_router(graph_router)
+app.include_router(metadata_router)
 app.include_router(chat_router)
 
 register_exception_handler(app)
@@ -74,3 +76,15 @@ register_exception_handler(app)
 @app.get(path="/health", tags=["Health"])
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get(path="/models", tags=["Meta"])
+async def get_models() -> dict[str, dict[str, str]]:
+    return {
+        "chat": {"provider": config.ai.PROVIDER, "model": config.chat.LLM_MODEL},
+        "graph": {"provider": config.ai.PROVIDER, "model": config.graph.LLM_MODEL},
+        "metadata": {"provider": config.ai.PROVIDER, "model": config.metadata.LLM_MODEL},
+        "embeddings": {"provider": config.ai.PROVIDER, "model": config.ai.EMBED_MODEL},
+        "asr_live": {"provider": config.asr.LIVE_PROVIDER, "model": config.asr.LIVE_MODEL},
+        "asr_final": {"provider": config.asr.FINAL_PROVIDER, "model": config.asr.FINAL_MODEL},
+    }

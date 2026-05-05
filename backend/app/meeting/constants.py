@@ -31,6 +31,7 @@ class LifecycleEvent(StrEnum):
     FINALIZING = "finalizing"
     FINAL = "final"
     FAILED = "failed"
+    METADATA_READY = "metadata_ready"
 
 
 GLOBAL_LIFECYCLE_EVENTS = frozenset(
@@ -40,6 +41,7 @@ GLOBAL_LIFECYCLE_EVENTS = frozenset(
         LifecycleEvent.UPLOADING,
         LifecycleEvent.FINAL,
         LifecycleEvent.FAILED,
+        LifecycleEvent.METADATA_READY,
     }
 )
 

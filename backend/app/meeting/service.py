@@ -96,6 +96,7 @@ class MeetingService:
         await redis_client.publish_meeting_lifecycle(meeting.id, LifecycleEvent.FINAL)
         await self.enqueue_graph_build(meeting_id)
         await self.enqueue_utterance_embeddings(meeting_id)
+        await self.enqueue_metadata_extraction(meeting_id)
         return True
 
     @staticmethod
@@ -111,6 +112,13 @@ class MeetingService:
 
         await embed_utterances.kiq(str(meeting_id))
         logger.debug("enqueued embed_utterances", meeting_id=meeting_id)
+
+    @staticmethod
+    async def enqueue_metadata_extraction(meeting_id: UUID) -> None:
+        from app.metadata.tasks import extract_meeting_metadata
+
+        await extract_meeting_metadata.kiq(str(meeting_id))
+        logger.debug("enqueued extract_meeting_metadata", meeting_id=meeting_id)
 
     async def create_for_upload(self, title: str) -> Meeting:
         code = f"upl-{token_urlsafe(8).lower()}"

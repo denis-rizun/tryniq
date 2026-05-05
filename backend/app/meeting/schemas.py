@@ -22,6 +22,8 @@ class MeetingResponse(BaseSchema):
     status: MeetingStatus
     started_at: datetime
     ended_at: datetime | None
+    summary: str | None = None
+    metadata_generated_at: datetime | None = None
 
 
 class MeetingUpdateRequest(UpdateSchema):
