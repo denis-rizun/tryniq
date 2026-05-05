@@ -5,6 +5,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
+import app.chat.models
 import app.graph.models
 import app.meeting.models
 import app.participant.models
