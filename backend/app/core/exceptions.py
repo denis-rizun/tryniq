@@ -39,6 +39,14 @@ class ConflictError(AppError):
         super().__init__(status.HTTP_409_CONFLICT, detail)
 
 
+class AIValidationError(ValueError):
+    def __init__(self, kind: str, detail: str, raw: str | None = None) -> None:
+        self.kind = kind
+        self.detail = detail
+        self.raw = raw
+        super().__init__(f"[{kind}] {detail}")
+
+
 def register_exception_handler(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def app_exception_handler(request: Request, exc: AppError) -> JSONResponse:
