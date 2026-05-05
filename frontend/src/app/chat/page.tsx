@@ -257,7 +257,7 @@ const ChatPage = () => {
               </div>
             )}
             {active?.messages.map((m, i) => (
-              <ChatMessage key={m.id ?? i} m={m} onCite={handleCite} />
+              <ChatMessage key={`${m.id ?? 'msg'}-${i}`} m={m} onCite={handleCite} />
             ))}
           </div>
 
