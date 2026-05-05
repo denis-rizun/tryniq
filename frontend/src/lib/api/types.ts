@@ -152,3 +152,77 @@ export interface PingEvent {
 }
 
 export type GlobalEvent = MeetingLifecycleEvent | PingEvent;
+
+export type ChatScope = 'meeting' | 'all';
+export type ChatRole = 'user' | 'assistant';
+
+export interface ChatCitation {
+  utterance_id: string;
+  meeting_id: string;
+  meeting_title: string | null;
+  meeting_started_at: string | null;
+  t_start: number;
+  t_end: number;
+  speaker: string | null;
+  text: string;
+  label: string;
+}
+
+export interface ChatMessageResponse {
+  id: string;
+  session_id: string;
+  role: ChatRole;
+  text: string;
+  citations: ChatCitation[];
+  model: string | null;
+  latency_ms: number | null;
+  created_at: string;
+}
+
+export interface ChatSessionResponse {
+  id: string;
+  title: string;
+  scope: ChatScope;
+  meeting_id: string | null;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string | null;
+  last_message_preview: string | null;
+}
+
+export interface ChatSessionDetailResponse {
+  id: string;
+  title: string;
+  scope: ChatScope;
+  meeting_id: string | null;
+  created_at: string;
+  updated_at: string;
+  messages: ChatMessageResponse[];
+}
+
+export interface ChatStreamMessageStarted {
+  kind: 'message_started';
+  user_message: ChatMessageResponse;
+  assistant_message_id: string;
+}
+
+export interface ChatStreamToken {
+  kind: 'token';
+  delta: string;
+}
+
+export interface ChatStreamCompleted {
+  kind: 'message_completed';
+  message: ChatMessageResponse;
+}
+
+export interface ChatStreamError {
+  kind: 'error';
+  detail: string;
+}
+
+export type ChatStreamEvent =
+  | ChatStreamMessageStarted
+  | ChatStreamToken
+  | ChatStreamCompleted
+  | ChatStreamError;

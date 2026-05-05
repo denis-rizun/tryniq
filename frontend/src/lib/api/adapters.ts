@@ -1,6 +1,18 @@
 import { formatDuration, formatTimestamp, pad2 } from '@/lib/format';
-import type { Meeting, MeetingListItem, PeopleMap, Utterance } from '@/lib/types';
 import type {
+  ChatCitationView,
+  ChatMessage as ChatMessageView,
+  ChatSession as ChatSessionView,
+  Meeting,
+  MeetingListItem,
+  PeopleMap,
+  Utterance,
+} from '@/lib/types';
+import type {
+  ChatCitation,
+  ChatMessageResponse,
+  ChatSessionDetailResponse,
+  ChatSessionResponse,
   MeetingResponse,
   MeetingStatus,
   TranscriptResponse,
@@ -151,3 +163,41 @@ export const toMeeting = (t: TranscriptResponse, title: string): AdaptedTranscri
 
   return { meeting, people, participantSlugById };
 };
+
+export const toChatCitation = (c: ChatCitation): ChatCitationView => ({
+  utteranceId: c.utterance_id,
+  meetingId: c.meeting_id,
+  meetingStartedAt: c.meeting_started_at,
+  tStart: c.t_start,
+  label: c.label,
+});
+
+export const toChatMessage = (m: ChatMessageResponse): ChatMessageView => ({
+  id: m.id,
+  role: m.role === 'user' ? 'user' : 'asst',
+  text: m.text,
+  model: m.model ?? undefined,
+  sources: m.citations.length || undefined,
+  latency: m.latency_ms != null ? `${(m.latency_ms / 1000).toFixed(1)}s` : undefined,
+  citations: m.citations.map(toChatCitation),
+});
+
+export const toChatSessionList = (s: ChatSessionResponse): ChatSessionView => ({
+  id: s.id,
+  title: s.title,
+  meetingId: s.meeting_id,
+  scope: s.scope,
+  isActive: false,
+  relTime: s.last_message_at ? formatRelative(s.last_message_at) : formatRelative(s.updated_at),
+  messages: [],
+});
+
+export const toChatSessionDetail = (s: ChatSessionDetailResponse): ChatSessionView => ({
+  id: s.id,
+  title: s.title,
+  meetingId: s.meeting_id,
+  scope: s.scope,
+  isActive: false,
+  relTime: formatRelative(s.updated_at),
+  messages: s.messages.map(toChatMessage),
+});
