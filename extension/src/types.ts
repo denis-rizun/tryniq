@@ -3,7 +3,7 @@ import type { StreamWebSocket } from "./websocket-client";
 
 export type TabKind = "meet" | "fake-meet" | "other";
 
-export type RecordingStatus = "idle" | "starting" | "recording" | "reconnecting" | "error";
+export type RecordingStatus = "idle" | "starting" | "recording" | "stopping" | "reconnecting" | "error";
 
 export interface Speaker {
   tile_id: string | null;

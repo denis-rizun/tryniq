@@ -1,7 +1,7 @@
 import { MESSAGE_SOURCE, STATE_PUSH_INTERVAL_MS } from "./constants";
 import { DomObserver } from "./dom-observer";
 import { createMeeting, finalizeMeeting } from "./meeting-api";
-import { broadcastState, buildContentState } from "./state-publisher";
+import { broadcastState, buildContentState, type RecordingIntent } from "./state-publisher";
 import { createStreamSlot, handleVoiceActivityEvent } from "./stream-manager";
 import { detectTabKind, isInjectableTab } from "./tab-detection";
 import { loadSettings, persistSettings } from "./settings";
@@ -17,12 +17,15 @@ let settings: ExtensionSettings = {
   captureMicrophone: true,
 };
 let recording = false;
+let recordingIntent: RecordingIntent = null;
 let meetingId: string | null = null;
 let startedAt: number | null = null;
 let stateIntervalId: number | null = null;
 
 const pushState = (): void => {
-  const ok = broadcastState(buildContentState({ recording, meetingId, startedAt, streams, tabKind }));
+  const ok = broadcastState(
+    buildContentState({ recording, recordingIntent, meetingId, startedAt, streams, tabKind }),
+  );
   if (!ok && stateIntervalId !== null) {
     clearInterval(stateIntervalId);
     stateIntervalId = null;
@@ -69,11 +72,13 @@ const startRecording = async (): Promise<void> => {
     startedAt = Date.now();
   } catch (error) {
     console.error("[tryniq] failed to create meeting", error);
+    recordingIntent = null;
     pushState();
     return;
   }
   domObserver.start();
   recording = true;
+  recordingIntent = null;
   window.postMessage({ source: MESSAGE_SOURCE, kind: "start" }, "*");
   pushState();
 };
@@ -91,6 +96,7 @@ const stopRecording = async (): Promise<void> => {
   }
   meetingId = null;
   startedAt = null;
+  recordingIntent = null;
   pushState();
 };
 
@@ -157,11 +163,29 @@ window.addEventListener("message", async (event: MessageEvent) => {
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResponse) => {
   if (message.kind === "popup.get_state") {
-    sendResponse({ state: buildContentState({ recording, meetingId, startedAt, streams, tabKind }) });
+    sendResponse({
+      state: buildContentState({ recording, recordingIntent, meetingId, startedAt, streams, tabKind }),
+    });
     return true;
   }
-  if (message.kind === "popup.start") { void startRecording(); sendResponse({ ok: true }); return true; }
-  if (message.kind === "popup.stop") { void stopRecording(); sendResponse({ ok: true }); return true; }
+  if (message.kind === "popup.start") {
+    if (!recording && recordingIntent !== "starting") {
+      recordingIntent = "starting";
+      pushState();
+    }
+    void startRecording();
+    sendResponse({ ok: true });
+    return true;
+  }
+  if (message.kind === "popup.stop") {
+    if (recording && recordingIntent !== "stopping") {
+      recordingIntent = "stopping";
+      pushState();
+    }
+    void stopRecording();
+    sendResponse({ ok: true });
+    return true;
+  }
   if (message.kind === "popup.set_settings") {
     void persistSettings(settings, { gatewayUrl: message.gatewayUrl, captureMicrophone: message.captureMicrophone })
       .then((updated) => { settings = updated; });
