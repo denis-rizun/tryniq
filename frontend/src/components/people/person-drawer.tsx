@@ -1,9 +1,13 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
 import { Avatar } from '@/components/ui/avatar';
 import { Backdrop } from '@/components/ui/backdrop';
 import { Icon } from '@/components/ui/icon';
 import { Pill } from '@/components/ui/pill';
 import { SectionLabel } from '@/components/ui/section-label';
-import { meeting, people } from '@/lib/mock';
+import { listPersonUtterances } from '@/lib/api/people';
+import { formatTimestamp } from '@/lib/format';
 import type { Person } from '@/lib/types';
 
 interface PersonDrawerProps {
@@ -15,7 +19,12 @@ const trim = (text: string, n: number): string =>
   text.length > n ? `${text.slice(0, n - 2)}…` : text;
 
 export const PersonDrawer = ({ person, onClose }: PersonDrawerProps) => {
-  const recent = meeting.utterances.filter((u) => people[u.speaker]?.id === person.id).slice(0, 6);
+  const utterancesQuery = useQuery({
+    queryKey: ['person-utterances', person.name],
+    queryFn: () => listPersonUtterances(person.name, 6),
+  });
+
+  const utterances = utterancesQuery.data ?? [];
 
   return (
     <>
@@ -44,45 +53,33 @@ export const PersonDrawer = ({ person, onClose }: PersonDrawerProps) => {
             <Pill>{person.name.split(' ')[0].toLowerCase()}</Pill>
             <Pill>{person.initials.toLowerCase()}</Pill>
           </div>
-          <SectionLabel>VOICE MATCH</SectionLabel>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
-            <div className="speak-bar" style={{ flex: 1 }}>
-              <div
-                className="speak-bar-fill"
-                style={{ width: '92%', background: 'var(--color-decision)' }}
-              />
-            </div>
-            <span className="mono" style={{ fontSize: 11, color: 'var(--color-decision)' }}>
-              92% confidence
-            </span>
-          </div>
           <SectionLabel>RECENT UTTERANCES</SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
-            {recent.map((u) => (
-              <div key={u.id} style={{ fontSize: 12, lineHeight: 1.5 }}>
-                <span
-                  className="mono"
-                  style={{ fontSize: 11, color: 'var(--color-ink-tertiary)', marginRight: 8 }}
-                >
-                  {u.time}
-                </span>
-                <span style={{ color: 'var(--color-ink-secondary)' }}>{trim(u.text, 110)}</span>
-              </div>
-            ))}
-            {recent.length === 0 && (
+            {utterancesQuery.isLoading ? (
+              <div style={{ fontSize: 12, color: 'var(--color-ink-tertiary)' }}>Loading…</div>
+            ) : utterances.length === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--color-ink-tertiary)' }}>
-                No utterances in the current meeting.
+                No utterances yet.
               </div>
+            ) : (
+              utterances.map((u) => (
+                <div key={u.id} style={{ fontSize: 12, lineHeight: 1.5 }}>
+                  <span
+                    className="mono"
+                    style={{ fontSize: 11, color: 'var(--color-ink-tertiary)', marginRight: 8 }}
+                  >
+                    {formatTimestamp(u.t_start)}
+                  </span>
+                  <span style={{ color: 'var(--color-ink-secondary)' }}>{trim(u.text, 110)}</span>
+                  <div
+                    className="mono"
+                    style={{ fontSize: 10, color: 'var(--color-ink-tertiary)', marginTop: 2 }}
+                  >
+                    {u.meeting_title}
+                  </div>
+                </div>
+              ))
             )}
-          </div>
-          <SectionLabel>ACTIONS</SectionLabel>
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button type="button" className="btn btn-sm">
-              Merge with…
-            </button>
-            <button type="button" className="btn btn-sm">
-              Split
-            </button>
           </div>
         </div>
       </aside>
