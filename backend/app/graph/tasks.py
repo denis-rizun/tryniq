@@ -35,9 +35,7 @@ async def build_graph(meeting_id: str, window_start: float | None, window_end: f
 
             patch = await service.apply_operations(mid, operations, utterances, short_refs)
         except (UngroundedExtractionError, UnknownUtteranceRefError, InvalidGraphOperationError) as e:
-            logger.warning(
-                "Skipping window, LLM produced invalid operations", meeting_id=meeting_id, reason=str(e)
-            )
+            logger.warning("Skipping window, LLM produced invalid operations", meeting_id=meeting_id, reason=str(e))
             await session.rollback()
             return
 

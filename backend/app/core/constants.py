@@ -10,6 +10,7 @@ class AIRequestKind(StrEnum):
     MEETING_METADATA = "meeting_metadata"
     CHAT_STREAM_ANSWER = "chat.stream_answer"
 
+
 GRAPH_EXTRACTION_SYSTEM_PROMPT = """You extract a meeting knowledge graph from a window of transcribed utterances.
 Return a JSON object with a single field "ops" — an array of graph operations.
 

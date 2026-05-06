@@ -34,9 +34,7 @@ class MetadataGraphWriter:
             .where(col(GraphNode.type).in_(GENERATED_NODE_TYPES))
         )
         await self.session.exec(
-            delete(GraphEdge)
-            .where(GraphEdge.meeting_id == meeting_id)
-            .where(GraphEdge.type == EdgeType.RELATES_TO)
+            delete(GraphEdge).where(GraphEdge.meeting_id == meeting_id).where(GraphEdge.type == EdgeType.RELATES_TO)
         )
         await self.session.flush()
 
@@ -165,9 +163,7 @@ class MetadataGraphWriter:
         status: NodeStatus,
         embedding: list[float] | None,
     ) -> GraphNode:
-        node = GraphNode(
-            meeting_id=meeting_id, type=node_type, fields=fields, status=status, embedding=embedding
-        )
+        node = GraphNode(meeting_id=meeting_id, type=node_type, fields=fields, status=status, embedding=embedding)
         self.session.add(node)
         await self.session.flush()
         return node
@@ -203,9 +199,7 @@ class MetadataGraphWriter:
 
             await self._upsert_edge(meeting_id, EdgeType.ABOUT_TOPIC, node_id, topic_id)
 
-    async def _upsert_edge(
-        self, meeting_id: UUID, edge_type: EdgeType, from_id: UUID, to_id: UUID
-    ) -> None:
+    async def _upsert_edge(self, meeting_id: UUID, edge_type: EdgeType, from_id: UUID, to_id: UUID) -> None:
         existing = (
             await self.session.exec(
                 select(GraphEdge)

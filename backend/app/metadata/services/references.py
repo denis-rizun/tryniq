@@ -9,9 +9,7 @@ class MetadataReferences:
     def __init__(self, utterances: list[Utterance], participants: list[Participant]) -> None:
         self.utterances = utterances
         self.participants = participants
-        self.utterance_by_token: dict[str, UUID] = {
-            f"u{idx:03d}": u.id for idx, u in enumerate(utterances, start=1)
-        }
+        self.utterance_by_token: dict[str, UUID] = {f"u{idx:03d}": u.id for idx, u in enumerate(utterances, start=1)}
         self.person_by_token: dict[str, UUID] = {self.get_person_ref(p.id): p.id for p in participants}
 
     @staticmethod
@@ -30,9 +28,7 @@ class MetadataReferences:
         for u in self.utterances:
             token = token_by_uid.get(u.id, "")
             person_token = pid_to_token.get(u.participant_id, "p_unknown")
-            utt_lines.append(
-                f"  [{token}] participant=[{person_token}] t={u.t_start:.2f}-{u.t_end:.2f}: {u.text}"
-            )
+            utt_lines.append(f"  [{token}] participant=[{person_token}] t={u.t_start:.2f}-{u.t_end:.2f}: {u.text}")
 
         return "\n".join([*person_lines, "", *utt_lines])
 

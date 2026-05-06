@@ -6,8 +6,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.core.client import get_ai_client
 from app.db import SessionDep
 from app.graph.service import GraphService
-from app.metadata.services.orchestrator import MetadataService
 from app.metadata.services.extractor import MetadataExtractor
+from app.metadata.services.orchestrator import MetadataService
 from app.metadata.services.reader import MetadataReader
 from app.metadata.services.related_finder import RelatedMeetingsFinder
 from app.metadata.services.writer import MetadataGraphWriter

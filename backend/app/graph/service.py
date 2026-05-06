@@ -255,12 +255,8 @@ class GraphService:
         short_refs: dict[str, UUID],
     ) -> GraphEdge | None:
         try:
-            from_id = await self._resolve_ref(
-                meeting_id, operation.from_ref, temp_to_id, utterance_lookup, short_refs
-            )
-            to_id = await self._resolve_ref(
-                meeting_id, operation.to_ref, temp_to_id, utterance_lookup, short_refs
-            )
+            from_id = await self._resolve_ref(meeting_id, operation.from_ref, temp_to_id, utterance_lookup, short_refs)
+            to_id = await self._resolve_ref(meeting_id, operation.to_ref, temp_to_id, utterance_lookup, short_refs)
         except (UnknownUtteranceRefError, InvalidGraphOperationError) as e:
             logger.warning(
                 "Dropping edge with unresolved ref",
@@ -377,6 +373,7 @@ class GraphService:
             if isinstance(value, str) and value.strip():
                 return value
         return ""
+
 
 def _cosine_distance(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b, strict=False))

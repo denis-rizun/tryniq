@@ -59,5 +59,5 @@ class FfmpegClient:
             logger.warning("ffmpeg failed", stderr=stderr.decode(errors="replace")[-300:])
             raise UploadDecodeError()
 
-ffmpeg_client = FfmpegClient()
 
+ffmpeg_client = FfmpegClient()
