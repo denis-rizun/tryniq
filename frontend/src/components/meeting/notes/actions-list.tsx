@@ -36,6 +36,7 @@ export const ActionsList = ({
   return (
     <>
       {Object.entries(grouped)
+        .filter(([, items]) => items.length > 0)
         .sort(([a], [b]) => (a === 'unassigned' ? -1 : b === 'unassigned' ? 1 : 0))
         .map(([owner, items]) => (
           <div key={owner} style={{ marginBottom: 12 }}>
