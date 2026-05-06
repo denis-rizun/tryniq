@@ -46,6 +46,22 @@ export const apiPost = async <T>(path: string, body: unknown): Promise<T> => {
   return (await res.json()) as T;
 };
 
+export interface BlobResponse {
+  blob: Blob;
+  filename: string | null;
+}
+
+export const apiGetBlob = async (path: string): Promise<BlobResponse> => {
+  const res = await fetch(`${config.apiBaseUrl}${path}`, { cache: 'no-store' });
+  if (!res.ok) {
+    throw new ApiError(res.status, `GET ${path} failed: ${res.status}`);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition');
+  const match = disposition?.match(/filename="?([^";]+)"?/i);
+  return { blob, filename: match?.[1] ?? null };
+};
+
 export const apiDelete = async (path: string): Promise<void> => {
   const res = await fetch(`${config.apiBaseUrl}${path}`, {
     method: 'DELETE',
