@@ -18,6 +18,7 @@ export const ShellOverlays = () => {
     paletteOpen,
     setPaletteOpen,
     exportOpen,
+    exportMeetingId,
     setExportOpen,
     toggleDrawer,
   } = useUIStore();
@@ -30,7 +31,9 @@ export const ShellOverlays = () => {
         defaultFilter={drawerDefaults.filter}
         defaultScope={drawerDefaults.scope}
       />
-      {exportOpen && <ExportModal meeting={meeting} onClose={() => setExportOpen(false)} />}
+      {exportOpen && exportMeetingId && (
+        <ExportModal meetingId={exportMeetingId} onClose={() => setExportOpen(false)} />
+      )}
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}

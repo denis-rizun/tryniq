@@ -17,7 +17,7 @@ interface Props {
 export const MeetingsClient = ({ meetings, loadError }: Props) => {
   const router = useRouter();
   const [q, setQ] = useState('');
-  const setExportOpen = useUIStore((s) => s.setExportOpen);
+  const openExport = useUIStore((s) => s.openExport);
 
   const filtered = meetings.filter(
     (m) => !q || m.title.toLowerCase().includes(q.toLowerCase()),
@@ -45,7 +45,7 @@ export const MeetingsClient = ({ meetings, loadError }: Props) => {
           meetings={filtered}
           people={people}
           onOpen={(id) => router.push(`/meetings/${id}/overview`)}
-          onExport={() => setExportOpen(true)}
+          onExport={(id) => openExport(id)}
         />
       )}
     </div>

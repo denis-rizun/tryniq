@@ -30,8 +30,11 @@ export const useKeyboardShortcuts = () => {
         e.preventDefault();
         toggleDrawer();
       } else if (meta && key === 'e' && pathname.startsWith('/meetings/')) {
-        e.preventDefault();
-        setExportOpen(true);
+        const match = pathname.match(/^\/meetings\/([^/]+)/);
+        if (match) {
+          e.preventDefault();
+          useUIStore.getState().openExport(match[1]);
+        }
       } else if (e.key === 'Escape') {
         if (paletteOpen) setPaletteOpen(false);
         else if (exportOpen) setExportOpen(false);

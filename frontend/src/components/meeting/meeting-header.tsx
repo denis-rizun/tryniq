@@ -48,7 +48,7 @@ const DurationBadge = ({ status, startedAt, endedAt }: DurationBadgeProps) => {
 };
 
 export const MeetingHeader = ({ meetingId }: { meetingId: string }) => {
-  const { setExportOpen, toggleDrawer } = useUIStore();
+  const { openExport, toggleDrawer } = useUIStore();
   const queryClient = useQueryClient();
 
   const meetingsQuery = useQuery({ queryKey: ['meetings'], queryFn: listMeetings });
@@ -112,7 +112,7 @@ export const MeetingHeader = ({ meetingId }: { meetingId: string }) => {
       <button type="button" className="btn btn-sm" onClick={() => toggleDrawer()}>
         Ask AI <Icon name="arrow-up-right" size={11} />
       </button>
-      <button type="button" className="btn btn-sm" onClick={() => setExportOpen(true)}>
+      <button type="button" className="btn btn-sm" onClick={() => openExport(meetingId)}>
         Export <Icon name="arrow-up-right" size={11} />
       </button>
     </div>
