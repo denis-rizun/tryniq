@@ -1,12 +1,22 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
 import { Backdrop } from '@/components/ui/backdrop';
 import { SectionLabel } from '@/components/ui/section-label';
 import { StatusDot } from '@/components/ui/status-dot';
+import { searchAll } from '@/lib/api/search';
+import { formatTimestamp } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { CommandPaletteProps, PaletteAction, PaletteItem } from './types';
+import type {
+  CommandPaletteProps,
+  PaletteAction,
+  PaletteItem,
+  PaletteMeeting,
+  PalettePerson,
+  PaletteUtterance,
+} from './types';
 
 const BASE_ACTIONS: PaletteAction[] = [
   { id: 'new', label: 'New meeting', kbd: 'N' },
@@ -14,44 +24,113 @@ const BASE_ACTIONS: PaletteAction[] = [
   { id: 'ai', label: 'Open AI assistant', kbd: '⌘L' },
 ];
 
-const matches = (text: string, q: string) => !q || text.toLowerCase().includes(q.toLowerCase());
+const PALETTE_AVATAR_COLORS = ['#A6B58F', '#C9A87A', '#B89AA5', '#9DA9B8', '#9C82A6', '#8FA6B5'];
 
-export const CommandPalette = ({
-  open,
-  onClose,
-  onAction,
-  meetings,
-  people,
-}: CommandPaletteProps) => {
+const initialsOf = (name: string): string => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const colorFor = (id: string): string => {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return PALETTE_AVATAR_COLORS[h % PALETTE_AVATAR_COLORS.length];
+};
+
+const formatRelative = (iso: string): string => {
+  const ms = new Date(iso).getTime();
+  if (Number.isNaN(ms)) return iso;
+  const diffSec = Math.max(0, (Date.now() - ms) / 1000);
+  if (diffSec < 60) return 'just now';
+  const m = Math.floor(diffSec / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+};
+
+const stateOf = (status: string): 'live' | 'finalizing' | 'final' => {
+  if (status === 'live') return 'live';
+  if (status === 'final' || status === 'failed') return 'final';
+  return 'finalizing';
+};
+
+export const CommandPalette = ({ open, onClose, onAction }: CommandPaletteProps) => {
   const [q, setQ] = useState('');
+  const [debouncedQ, setDebouncedQ] = useState('');
   const [idx, setIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
-
-  useEffect(() => {
     if (open) {
+      inputRef.current?.focus();
       setQ('');
+      setDebouncedQ('');
       setIdx(0);
     }
   }, [open]);
 
-  if (!open) return null;
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedQ(q.trim()), 150);
+    return () => clearTimeout(handle);
+  }, [q]);
 
-  const recent = meetings.slice(0, 4).filter((m) => matches(m.title, q));
-  const peopleList = Object.values(people)
-    .filter((p) => matches(p.name, q))
-    .slice(0, 4);
-  const actions = BASE_ACTIONS.filter((a) => matches(a.label, q));
+  const searchQuery = useQuery({
+    queryKey: ['palette-search', debouncedQ],
+    queryFn: () => searchAll(debouncedQ),
+    enabled: open && debouncedQ.length > 0,
+    staleTime: 5_000,
+  });
+
+  const meetings: PaletteMeeting[] = useMemo(
+    () =>
+      (searchQuery.data?.results.meetings ?? []).map((m) => ({
+        id: m.id,
+        title: m.title,
+        state: stateOf(m.status),
+        relativeStart: formatRelative(m.started_at),
+      })),
+    [searchQuery.data],
+  );
+  const people: PalettePerson[] = useMemo(
+    () =>
+      (searchQuery.data?.results.people ?? []).map((p) => ({
+        id: p.id,
+        name: p.name,
+        initials: initialsOf(p.name),
+        color: colorFor(p.id),
+      })),
+    [searchQuery.data],
+  );
+  const utterances: PaletteUtterance[] = useMemo(
+    () =>
+      (searchQuery.data?.results.utterances ?? []).map((u) => ({
+        id: u.id,
+        meetingId: u.meeting_id,
+        meetingTitle: u.meeting_title,
+        participantName: u.speaker_name,
+        tStart: u.t_start,
+        text: u.text,
+      })),
+    [searchQuery.data],
+  );
+
+  const actions = BASE_ACTIONS.filter(
+    (a) => !q || a.label.toLowerCase().includes(q.toLowerCase()),
+  );
   const askRow: PaletteAction[] = q.trim()
     ? [{ id: 'ask', label: `Ask AI: "${q}"`, kbd: '↵', isAsk: true }]
     : [];
 
+  if (!open) return null;
+
   const all: PaletteItem[] = [
-    ...recent.map((m) => ({ ...m, _kind: 'meeting' as const })),
-    ...peopleList.map((p) => ({ ...p, _kind: 'person' as const })),
+    ...meetings.map((m) => ({ ...m, _kind: 'meeting' as const })),
+    ...people.map((p) => ({ ...p, _kind: 'person' as const })),
+    ...utterances.map((u) => ({ ...u, _kind: 'utterance' as const })),
     ...actions.map((a) => ({ ...a, _kind: 'action' as const })),
     ...askRow.map((a) => ({ ...a, _kind: 'action' as const })),
   ];
@@ -70,6 +149,13 @@ export const CommandPalette = ({
     }
   };
 
+  const empty =
+    debouncedQ.length > 0 &&
+    !searchQuery.isFetching &&
+    meetings.length === 0 &&
+    people.length === 0 &&
+    utterances.length === 0;
+
   let cursor = 0;
   return (
     <>
@@ -78,7 +164,7 @@ export const CommandPalette = ({
         <input
           ref={inputRef}
           className="cmd-input"
-          placeholder="Search meetings, people, actions… or ask AI"
+          placeholder="Search meetings, people, transcripts… or ask AI"
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
@@ -87,12 +173,17 @@ export const CommandPalette = ({
           onKeyDown={onKey}
         />
         <div className="cmd-list">
-          {recent.length > 0 && (
+          {searchQuery.isFetching && debouncedQ && (
+            <div style={{ padding: '8px 4px', fontSize: 12, color: 'var(--color-ink-tertiary)' }}>
+              Searching…
+            </div>
+          )}
+          {meetings.length > 0 && (
             <>
               <div style={{ marginTop: 6 }}>
-                <SectionLabel>RECENT MEETINGS</SectionLabel>
+                <SectionLabel>MEETINGS</SectionLabel>
               </div>
-              {recent.map((m) => {
+              {meetings.map((m) => {
                 const ci = cursor++;
                 return (
                   <div
@@ -111,12 +202,12 @@ export const CommandPalette = ({
               })}
             </>
           )}
-          {peopleList.length > 0 && (
+          {people.length > 0 && (
             <>
               <div style={{ marginTop: 14 }}>
                 <SectionLabel>PEOPLE</SectionLabel>
               </div>
-              {peopleList.map((p) => {
+              {people.map((p) => {
                 const ci = cursor++;
                 return (
                   <div
@@ -134,6 +225,58 @@ export const CommandPalette = ({
                 );
               })}
             </>
+          )}
+          {utterances.length > 0 && (
+            <>
+              <div style={{ marginTop: 14 }}>
+                <SectionLabel>TRANSCRIPTS</SectionLabel>
+              </div>
+              {utterances.map((u) => {
+                const ci = cursor++;
+                const speaker = u.participantName ?? 'Speaker';
+                return (
+                  <div
+                    key={u.id}
+                    className={cn('cmd-row', idx === ci && 'active')}
+                    onMouseEnter={() => setIdx(ci)}
+                    onClick={() => onAction({ ...u, _kind: 'utterance' })}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 2,
+                        minWidth: 0,
+                        flex: 1,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 13,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {u.text}
+                      </div>
+                      <div
+                        className="mono"
+                        style={{ fontSize: 10, color: 'var(--color-ink-tertiary)' }}
+                      >
+                        {speaker} · {u.meetingTitle}
+                      </div>
+                    </div>
+                    <span className="right mono">{formatTimestamp(u.tStart)}</span>
+                  </div>
+                );
+              })}
+            </>
+          )}
+          {empty && (
+            <div style={{ padding: '8px 4px', fontSize: 12, color: 'var(--color-ink-tertiary)' }}>
+              No matches.
+            </div>
           )}
           {(actions.length > 0 || askRow.length > 0) && (
             <>
