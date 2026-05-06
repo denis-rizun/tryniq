@@ -49,7 +49,7 @@ export const AIAssistantDrawer = ({
       onCiteJump?.(c.label);
       return;
     }
-    router.push(`/meetings/${c.meetingId}/overview`);
+    router.push(`/meetings/${c.meetingId}/overview?cite=${c.tStart}`);
     onClose();
   };
 

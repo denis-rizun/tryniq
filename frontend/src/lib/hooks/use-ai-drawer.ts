@@ -78,9 +78,16 @@ export const useAIDrawer = (
 
   const active: ChatSession | undefined = useMemo(() => {
     if (!activeBase) return undefined;
+    const persistedIds = new Set(
+      activeBase.messages.map((m) => m.id).filter((id): id is string => !!id),
+    );
     const merged = [...activeBase.messages];
-    if (pendingUser) merged.push(pendingUser);
-    if (pendingAssistant) merged.push(pendingAssistant);
+    if (pendingUser && !(pendingUser.id && persistedIds.has(pendingUser.id))) {
+      merged.push(pendingUser);
+    }
+    if (pendingAssistant && !(pendingAssistant.id && persistedIds.has(pendingAssistant.id))) {
+      merged.push(pendingAssistant);
+    }
     return { ...activeBase, messages: merged };
   }, [activeBase, pendingAssistant, pendingUser]);
 
