@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.asr.router import router as asr_router
+from app.audio.router import router as audio_router
 from app.chat.router import router as chat_router
 from app.config import config
 from app.core.exceptions import register_exception_handler
@@ -20,6 +21,7 @@ from app.meeting.routers.event import router as events_router
 from app.meeting.routers.meeting import router as meeting_router
 from app.metadata.router import router as metadata_router
 from app.participant.router import router as participant_router
+
 from app.tasks import broker
 from app.transcript.router import router as transcript_router
 from app.upload.router import router as upload_router
@@ -71,6 +73,7 @@ app.include_router(graph_router)
 app.include_router(metadata_router)
 app.include_router(export_router)
 app.include_router(chat_router)
+app.include_router(audio_router)
 
 register_exception_handler(app)
 
