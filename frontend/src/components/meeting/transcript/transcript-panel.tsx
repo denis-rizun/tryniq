@@ -44,6 +44,15 @@ export const TranscriptPanel = ({
     if (el) el.scrollTop = el.scrollHeight;
   }, [currentUtterance, animatedUtterance, autoScroll]);
 
+  useEffect(() => {
+    if (!flashId) return;
+    const target = scrollRef.current?.querySelector(`[data-utt-id="${flashId}"]`);
+    if (target instanceof HTMLElement) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setAutoScroll(false);
+    }
+  }, [flashId]);
+
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
