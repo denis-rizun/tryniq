@@ -21,7 +21,7 @@ from app.meeting.routers.event import router as events_router
 from app.meeting.routers.meeting import router as meeting_router
 from app.metadata.router import router as metadata_router
 from app.participant.router import router as participant_router
-
+from app.search.router import router as search_router
 from app.tasks import broker
 from app.transcript.router import router as transcript_router
 from app.upload.router import router as upload_router
@@ -74,6 +74,7 @@ app.include_router(metadata_router)
 app.include_router(export_router)
 app.include_router(chat_router)
 app.include_router(audio_router)
+app.include_router(search_router)
 
 register_exception_handler(app)
 
