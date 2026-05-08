@@ -4,9 +4,9 @@
 
 | Field                 | Value                                              |
 |-----------------------|----------------------------------------------------|
-| **Document version**  | 1.1                                                |
-| **Status**            | In flight — Phases 1–2 done; Phase 3 next          |
-| **Last updated**      | 2026-05-03                                         |
+| **Document version**  | 1.2                                                |
+| **Status**            | In flight — Phases 1–5 landed; Phase 6 polish      |
+| **Last updated**      | 2026-05-08                                         |
 | **Target demo date**  | 2026-05-11, 16:00                                  |
 | **Project codename**  | Tryniq                                             |
 | **Document owner**    | Engineering team                                   |
@@ -44,7 +44,7 @@ Tryniq is an open-source meeting intelligence platform designed to replace tl;dv
 
 **Second, Tryniq models a meeting as a live knowledge graph rather than as a transcript.** Speakers, topics, decisions, action items, open questions, and entities become nodes connected by typed edges. The transcript is the raw input; the graph is the product. Notes, summaries, search, action items, and cross-meeting memory are all projections of the same graph. This makes Tryniq a foundation for an organizational knowledge graph fed by meetings, rather than a single-meeting summarization tool.
 
-The MVP delivers a working Chrome extension for Google Meet, an end-to-end pipeline for live transcription (Parakeet-TDT v2 via `fluid_audio` running in a standalone Swift streamer process on Apple Silicon) and post-meeting refinement (faster-whisper large-v3-turbo in the Python worker), a real-time graph builder powered by structured-output LLM extraction, a web UI with synchronized transcript and graph visualization, cross-meeting speaker memory via ECAPA-TDNN embeddings, topic linking between meetings, retrieval-augmented question answering over completed meetings, and full export to Markdown.
+The MVP delivers a working Chrome extension for Google Meet, an end-to-end pipeline for live transcription (Parakeet-TDT v2 via `fluid_audio` running in a standalone Swift streamer process on Apple Silicon) and post-meeting refinement (faster-whisper large-v3-turbo in the Python worker), a real-time graph builder powered by structured-output LLM extraction, a web UI with synchronized transcript and graph visualization, post-meeting title/summary/related-meeting reconciliation, retrieval-augmented "chat with the meeting" sessions with timestamped citations, a people directory and cross-meeting search, an uploaded-recording fallback path, and full export to Markdown. Cross-meeting speaker memory via ECAPA-TDNN embeddings is deferred to post-demo.
 
 Everything is open-source and self-hostable. The only optional cloud dependency is the LLM for graph extraction, which can be swapped for a local Qwen 2.5 model.
 
@@ -80,16 +80,18 @@ A reviewer watching the demo should walk away with three impressions:
 
 ### 3.1 Goals (MVP, by 2026-05-11)
 
-- **G1** — Capture clean per-speaker audio from a live Google Meet session via Chrome extension, with each speaker's display name resolved automatically from the DOM.
-- **G2** — Produce a live transcript with sub-3-second latency from speech to text appearing in the UI, with correct speaker attribution.
-- **G3** — Refine the live transcript into a high-accuracy final transcript after the meeting ends, using a stronger ASR model on the full per-speaker audio.
-- **G4** — Build and visualize a meeting knowledge graph in real time, containing topics, decisions, action items, open questions, and entities, with grounding to source utterances.
-- **G5** — Persist speaker identity across meetings via voice embeddings, so a person met in meeting N is recognized in meeting N+1 without re-introduction.
-- **G6** — Link topics across meetings, so a recurring discussion is visibly connected to its history.
-- **G7** — Allow post-meeting question answering ("Chat with the meeting") via retrieval over the transcript, with timestamped citations.
-- **G8** — Export a structured Markdown summary of any meeting, suitable for pasting into a wiki or ticket.
-- **G9** — Run entirely on a self-hostable stack with a single `make up` command.
-- **G10** — Produce honest, comparative model evaluation across at least three ASR options on shared test recordings.
+Status legend: ✓ done · ◐ in flight · → deferred to post-demo.
+
+- **G1 ✓** — Capture clean per-speaker audio from a live Google Meet session via Chrome extension, with each speaker's display name resolved automatically from the DOM.
+- **G2 ✓** — Produce a live transcript with sub-3-second latency from speech to text appearing in the UI, with correct speaker attribution.
+- **G3 ✓** — Refine the live transcript into a high-accuracy final transcript after the meeting ends, using a stronger ASR model on the full per-speaker audio.
+- **G4 ✓** — Build and visualize a meeting knowledge graph in real time, containing topics, decisions, action items, open questions, and entities, with grounding to source utterances.
+- **G5 →** — Persist speaker identity across meetings via voice embeddings (deferred; display-name based identity works today).
+- **G6 ✓** — Link topics / meetings across recordings via post-meeting metadata reconciliation (`extract_meeting_metadata`).
+- **G7 ✓** — Allow post-meeting question answering ("Chat with the meeting") via retrieval over the transcript, with timestamped citations.
+- **G8 ✓** — Export a structured Markdown summary of any meeting, suitable for pasting into a wiki or ticket.
+- **G9 ✓** — Run entirely on a self-hostable stack with a single `make up` command.
+- **G10 ✓** — Produce honest, comparative model evaluation across at least three ASR options on shared test recordings.
 
 ### 3.2 Non-goals for MVP
 
@@ -589,7 +591,7 @@ The system has **three processes**: a Python `api` and `worker` (one codebase in
 |---|---|---|
 | Extension | Capture, VAD, name resolution, per-stream WS to api | No |
 | `api` | WebSocket termination (ingest + Swift streamer + global events), audio persistence to MinIO, REST, SSE/WS bridge from Redis pub/sub, task enqueueing | No (writes only) |
-| `worker` | Final ASR (Phase 2). Phase 3+: aggregator window emission, graph builder LLM extraction, speaker ID, embeddings | Writes to Postgres / MinIO |
+| `worker` | Final ASR, aggregator window emission, graph builder LLM extraction, post-meeting metadata extraction, utterance embedding for chat, uploaded-recording demux + diarization. Phase 7: speaker ID / voice embeddings | Writes to Postgres / MinIO |
 | `streamer` (Swift) | Live ASR per assigned stream; emits partial/committed events back to api | No (in-memory) |
 | Postgres + pgvector | Meetings, utterances, participants. Phase 3+: `graph_nodes`, `graph_edges`, embeddings, speaker profiles | Yes |
 | MinIO | Per-speaker WAVs and exports | Yes |
@@ -799,12 +801,14 @@ Live ASR is **not** a TaskIQ task — it runs in the Swift streamer process. The
 | Task | Args | Producer | Status | Purpose |
 |---|---|---|---|---|
 | `transcribe_final` | `(meeting_id, stream_id)` | api (on meeting end) | implemented (`app/asr/tasks.py`) | faster-whisper large-v3-turbo on the full per-speaker WAV; replaces live segments |
-| `aggregate_window` | `(meeting_id,)` | self-scheduled (every 15 s while live) | Phase 3 | Builds 30 s sliding window; enqueues `build_graph` if changed |
-| `build_graph` | `(meeting_id, window_id)` | aggregator | Phase 3 | LLM extraction; node dedup; writes `graph_nodes` / `graph_edges` |
-| `compute_speaker_embeddings` | `(meeting_id,)` | api (on meeting end) | Phase 5 | ECAPA per speaker; updates `voice_embeddings` |
-| `match_speaker` | `(meeting_id, stream_id)` | api (on new stream) | Phase 5 | Nearest-neighbor against historical voice embeddings |
-| `embed_utterances` | `(meeting_id,)` | api (on meeting end) | Phase 5 | Populates `utterance_embeddings` for RAG |
-| `rebuild_window` | `(meeting_id, t_start, t_end)` | api (on transcript edit) | Phase 6 | Localized graph re-extraction over an edited region |
+| `aggregate_window` | `(meeting_id,)` | self-scheduled (every 15 s while live) | implemented (`app/graph/tasks.py`) | Builds 30 s sliding window; enqueues `build_graph` if changed |
+| `build_graph` | `(meeting_id, window_start, window_end)` | aggregator | implemented (`app/graph/tasks.py`) | LLM extraction; node dedup; writes `graph_nodes` / `graph_edges` |
+| `extract_meeting_metadata` | `(meeting_id,)` | api (on meeting end) | implemented (`app/metadata/tasks.py`) | Final-pass LLM extraction over the refined transcript; rebuilds graph + meeting metadata |
+| `embed_utterances` | `(meeting_id,)` | api (on meeting end) | implemented (`app/chat/tasks.py`) | Populates `utterance_embeddings` for chat / RAG |
+| `process_upload` | `(meeting_id, source_key)` | api (on upload) | implemented (`app/upload/tasks.py`) | Demuxes uploaded recording, runs diarization, ingests as a meeting |
+| `compute_speaker_embeddings` | `(meeting_id,)` | api (on meeting end) | Phase 7 | ECAPA per speaker; updates `voice_embeddings` |
+| `match_speaker` | `(meeting_id, stream_id)` | api (on new stream) | Phase 7 | Nearest-neighbor against historical voice embeddings |
+| `rebuild_window` | `(meeting_id, t_start, t_end)` | api (on transcript edit) | Phase 7 | Localized graph re-extraction over an edited region |
 
 All tasks are **idempotent** (use deterministic IDs / upsert semantics) so TaskIQ retries on the Redis broker are safe.
 
@@ -825,18 +829,31 @@ All paths are mounted under root `/api/v1` (set on the FastAPI app). Endpoints m
 |---|---|---|---|
 | `POST` | `/api/v1/meetings` | implemented | Create meeting |
 | `GET` | `/api/v1/meetings` | implemented | List meetings |
+| `GET` | `/api/v1/meetings/{id}` | implemented | Meeting detail |
 | `PATCH` | `/api/v1/meetings/{id}` | implemented | Update meeting |
 | `GET` | `/api/v1/meetings/{id}/transcript` | implemented | Full transcript |
 | `GET` | `/api/v1/meetings/{id}/participants` | implemented | List participants |
 | `GET` | `/api/v1/meetings/{id}/events` | implemented | SSE stream for live meeting updates |
+| `GET` | `/api/v1/meetings/{id}/graph` | implemented | Full graph state |
+| `GET` | `/api/v1/meetings/{id}/metadata` | implemented | Title / summary / related meetings (post-meeting) |
+| `GET` | `/api/v1/meetings/{id}/export` | implemented | Markdown export |
+| `GET` | `/api/v1/meetings/{id}/audio` | implemented | List per-stream audio assets |
+| `GET` | `/api/v1/meetings/{id}/audio/{stream_id}` | implemented | Download a stream WAV |
+| `POST` | `/api/v1/meetings/upload` | implemented | Upload a meeting recording (post-MVP fallback path) |
+| `GET` | `/api/v1/people` | implemented | People directory |
+| `GET` | `/api/v1/people/utterances` | implemented | Utterances by person across meetings |
+| `GET` | `/api/v1/search` | implemented | Cross-meeting search (palette backend) |
+| `POST` | `/api/v1/chats/sessions` | implemented | Create chat session |
+| `GET` | `/api/v1/chats/sessions` | implemented | List chat sessions |
+| `GET` | `/api/v1/chats/sessions/{id}` | implemented | Chat session detail |
+| `PATCH` | `/api/v1/chats/sessions/{id}` | implemented | Rename chat session |
+| `DELETE` | `/api/v1/chats/sessions/{id}` | implemented | Delete chat session |
+| `POST` | `/api/v1/chats/sessions/{id}/messages` | implemented | Ask a question; streams cited answer |
 | `WS` | `/api/v1/events/ws` | implemented | Global lifecycle WebSocket (directory UI) |
 | `WS` | `/api/v1/meetings/{meeting_id}/streams/{stream_id}` | implemented | Ingest WebSocket (browser → api) |
 | `WS` | `/api/v1/asr/sessions?token=...` | implemented | Swift streamer registration |
-| `GET` | `/api/v1/meetings/{id}/graph` | Phase 3 | Full graph state |
-| `POST` | `/api/v1/meetings/{id}/ask` | Phase 6 | Chat with the meeting |
-| `PATCH` | `/api/v1/utterances/{id}` | Phase 6 | Edit transcript text |
-| `PATCH` | `/api/v1/persons/{id}` | Phase 5 | Rename / link speaker identity |
-| `GET` | `/api/v1/meetings/{id}/export.md` | Phase 5 | Markdown export |
+| `PATCH` | `/api/v1/utterances/{id}` | Phase 7 | Edit transcript text |
+| `PATCH` | `/api/v1/persons/{id}` | Phase 7 | Rename / link speaker identity |
 
 ### 9.4 LLM prompt contract for graph extraction
 
@@ -1019,29 +1036,28 @@ Seven daily phases, each ending with a working end-to-end milestone in its own s
 - Swift `streamer/` process running Parakeet-TDT v2 via `fluid_audio`, registered with the api at `/asr/sessions`; `transcribe_final` TaskIQ task; minimal UI showing live transcript via SSE bridged from Redis pub/sub.
 - **Done when:** speech in Meet appears in UI within 3 seconds with correct speaker labels; final pass refines the transcript after meeting end. ✓
 
-### Phase 3 — Graph builder core (day 3)
-- Postgres `graph_nodes` / `graph_edges` schema, `aggregate_window` + `build_graph` tasks, LLM prompt with structured output, idempotency, source edges.
-- **Done when:** a 5-minute scripted meeting produces a graph with correct decisions and action items, all grounded to utterances.
+### Phase 3 — Graph builder core (done)
+- Postgres `graph_nodes` / `graph_edges` schema, `aggregate_window` + `build_graph` tasks (`app/graph/tasks.py`), LLM extractor in `app/graph/clients/extractor.py`, idempotent dedup, source edges.
+- **Done when:** a scripted meeting produces a graph with grounded decisions and action items. ✓
 
-### Phase 4 — Graph UI and notes (day 4)
-- Cytoscape graph view, structured notes panel, transcript-graph cross-linking, manual corrections.
-- **Done when:** graph and notes update live; clicking a decision jumps the transcript to its source.
+### Phase 4 — Graph UI and notes (done)
+- Cytoscape graph view (`frontend/src/components/meeting/graph`), structured notes panel (`components/meeting/notes`), tabbed meeting layout (`overview` / `graph` / `speakers` / `settings`), transcript scroll-to-utterance, audio track downloads, command palette wired to `/search`.
+- **Done when:** graph and notes update live; clicking a decision jumps the transcript to its source. ✓
 
-### Phase 5 — Cross-meeting memory and post-processing (day 5)
-- `compute_speaker_embeddings`, `match_speaker`, `embed_utterances` tasks; topic embedding linking, full-meeting graph re-extraction after final ASR, Markdown export.
-- **Done when:** two consecutive test meetings show speaker recognition and topic linking; export produces clean Markdown.
+### Phase 5 — Post-processing and cross-meeting layer (done)
+- `embed_utterances` (chat / RAG embeddings), `extract_meeting_metadata` (final-pass title / summary / related-meetings reconciliation in `app/metadata/`), Markdown export (`app/export/`), audio asset endpoints, people directory, upload-recording fallback path (`app/upload/` with ffmpeg + diarization clients).
+- **Done when:** completed meetings produce a refined transcript, a clean graph, related-meeting links, exportable Markdown, and chat-with-the-meeting answers with citations. ✓
 
-### Phase 6 — Killer features and polish (day 6)
-- Two of: open question pings, owner-less warnings, chat with the meeting, confidence-aware transcript, inline editing.
-- Polish: extension popup, error toasts, README, empty states.
+### Phase 6 — Polish (in flight, demo week)
+- Chat session UX (dedup pending messages, inline citations to timestamps), command palette hookup, export modal, meeting settings (audio downloads, rename), people page wired to backend, langfuse v3 tracing.
+- Remaining: extension popup polish, empty states, README final pass, demo-flow rehearsal fixes.
 - **Done when:** demo flow runs end-to-end without manual intervention.
 
-### Phase 7 — Demo rehearsal (day 7)
-- Three full demo runs.
-- Backup recording.
-- Slides for architecture and model card.
-- FAQ preparation.
-- **Done when:** team is confident demo will land.
+### Phase 7 — Post-demo (deferred)
+- `compute_speaker_embeddings`, `match_speaker`, voice-print cross-meeting recognition.
+- Inline transcript editing with `rebuild_window` localized re-extraction.
+- Confidence-aware transcript rendering polish.
+- **Status:** not built for the 2026-05-11 demo; signaled as next steps.
 
 ---
 
@@ -1152,6 +1168,29 @@ tryniq/
 │       │   ├── schemas.py        # /asr/sessions event schemas
 │       │   ├── constants.py      # binary frame header layout
 │       │   └── config.py         # ASRSettings
+│       ├── graph/                # graph_nodes / graph_edges + aggregate_window / build_graph
+│       │   ├── router.py         # GET /meetings/{id}/graph
+│       │   ├── tasks.py          # aggregate_window, build_graph
+│       │   └── clients/extractor.py  # LLM graph extractor
+│       ├── metadata/             # post-meeting title/summary/related extraction
+│       │   ├── router.py         # GET /meetings/{id}/metadata
+│       │   ├── tasks.py          # extract_meeting_metadata
+│       │   └── services/         # extractor, graph_index, orchestrator, related_finder, …
+│       ├── chat/                 # chat-with-the-meeting (RAG)
+│       │   ├── router.py         # /chats/sessions, /messages
+│       │   ├── tasks.py          # embed_utterances
+│       │   └── clients/          # retriever, prompt_builder, context_builder, responder
+│       ├── export/               # Markdown export
+│       │   ├── router.py         # GET /meetings/{id}/export
+│       │   └── services/         # export, md_render
+│       ├── audio/                # per-stream audio listing + WAV download
+│       │   └── router.py         # GET /meetings/{id}/audio[/{stream_id}]
+│       ├── search/               # cross-meeting search backing the command palette
+│       │   └── router.py         # GET /search
+│       ├── upload/               # uploaded-recording fallback path
+│       │   ├── router.py         # POST /meetings/upload
+│       │   ├── tasks.py          # process_upload
+│       │   └── clients/          # ffmpeg, diarization
 │       ├── transcript/
 │       └── participant/
 ├── streamer/                     # Swift, live ASR (Parakeet-TDT v2 via fluid_audio)
@@ -1172,9 +1211,24 @@ tryniq/
 └── frontend/                     # Next.js App Router (TypeScript)
     └── src/
         ├── app/
+        │   ├── meetings/         # directory + per-meeting tabs (overview/graph/speakers/settings)
+        │   ├── people/           # people directory
+        │   ├── chat/             # chat-with-the-meeting sessions
+        │   ├── upload/           # upload-a-recording flow
+        │   └── extension/        # extension landing
         ├── components/
+        │   ├── meeting/          # graph, notes, transcript, speakers, settings, header, tabs
+        │   ├── chat/
+        │   ├── command-palette/
+        │   ├── export/
+        │   ├── meetings-list/
+        │   ├── people/
+        │   ├── upload/
+        │   ├── extension/
+        │   ├── shell/
+        │   └── ui/
         └── lib/
-            ├── api/              # client.ts, meetings.ts, events.ts, types.ts, adapters.ts
+            ├── api/              # client.ts, meetings.ts, events.ts, types.ts, adapters.ts, …
             ├── config.ts
             ├── hooks/
             └── mock/
