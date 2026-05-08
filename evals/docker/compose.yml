@@ -1,0 +1,31 @@
+# docker compose -f evals/docker/compose.yml run --rm evals <args>
+# All commands forward to `uv run eval ...` (the image's ENTRYPOINT).
+
+services:
+  evals:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: tryniq-evals:cuda
+    # Requires Docker Desktop 4.x+ on Windows with WSL2 backend, and a recent
+    # NVIDIA driver. No nvidia-container-toolkit install needed — Docker Desktop
+    # bundles it. On native Linux, `docker run --gpus all …` does the same.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # Mount the host's datasets/ + results/ in. Edit these paths if your layout differs.
+    volumes:
+      - ../../datasets:/datasets
+      - ../results:/app/evals/results
+      - hf-cache:/root/.cache/huggingface
+    environment:
+      TRYNIQ_EVALS_CACHE: /datasets
+      # Forward your token so gated models/datasets work; export HF_TOKEN locally first.
+      HF_TOKEN: ${HF_TOKEN:-}
+
+volumes:
+  hf-cache:

@@ -1,0 +1,20 @@
+[project]
+name = "tryniq-evals-faster-whisper"
+version = "0.1.0"
+description = "Adapter env for faster-whisper / distil-whisper / faster-whisper-tiny + Silero VAD."
+requires-python = ">=3.13"
+dependencies = [
+    "faster-whisper>=1.0.3",
+    "soundfile>=0.12",
+    "numpy>=1.26",
+    "pydantic>=2.8",
+    "onnxruntime>=1.18",  # for Silero VAD in faster_whisper_streaming
+    "silero-vad>=5.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["adapter"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

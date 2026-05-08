@@ -1,0 +1,19 @@
+[project]
+name = "tryniq-evals-mlx"
+version = "0.1.0"
+description = "Adapter env for parakeet-mlx (Apple Silicon)."
+requires-python = ">=3.13"
+dependencies = [
+    "parakeet-mlx>=0.3.5",
+    "mlx>=0.18",
+    "soundfile>=0.12",
+    "numpy>=1.26",
+    "pydantic>=2.8",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["adapter"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

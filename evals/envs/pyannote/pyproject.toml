@@ -1,0 +1,26 @@
+[project]
+name = "tryniq-evals-pyannote"
+version = "0.1.0"
+description = "Adapter env for pyannote.audio + SpeechBrain ECAPA-TDNN diarization."
+requires-python = ">=3.13"
+dependencies = [
+    "pyannote.audio>=3.3",
+    "speechbrain>=1.0",
+    "scikit-learn>=1.5",
+    "torch>=2.4",
+    "torchaudio>=2.4",
+    "soundfile>=0.12",
+    "numpy>=1.26",
+    "pydantic>=2.8",
+    # Reverb Diarization v2 — Rev's open-weights checkpoint (CC-BY-NC-4.0).
+    # The pip name on Rev's repo is `reverb-diarize` and bundles model loading
+    # for the v2 checkpoint. Verify on first env-sync; flag if upstream renames.
+    "reverb-diarize>=0.2 ; python_version<'3.13'",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["adapter"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

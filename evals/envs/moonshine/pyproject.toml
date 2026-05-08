@@ -1,0 +1,21 @@
+[project]
+name = "tryniq-evals-moonshine"
+version = "0.1.0"
+description = "Adapter env for Moonshine ONNX."
+requires-python = ">=3.13"
+dependencies = [
+    "useful-moonshine-onnx>=0.2.0",
+    "onnxruntime>=1.18",
+    "tokenizers>=0.20",
+    "soundfile>=0.12",
+    "numpy>=1.26",
+    "pydantic>=2.8",
+    "huggingface-hub>=0.25",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["adapter"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
