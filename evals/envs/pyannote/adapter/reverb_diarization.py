@@ -7,17 +7,16 @@ from adapter._base import log
 
 
 def _load_pipeline():
-    token = os.environ.get("HF_TOKEN")
+    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
     try:
-        from reverb_diarize import ReverbDiarize                
+        from reverb_diarize import ReverbDiarize
         log("loaded reverb_diarize.ReverbDiarize")
-        return ReverbDiarize.from_pretrained(use_auth_token=token)
-    except Exception as e:                
+        return ReverbDiarize.from_pretrained(token=token)
+    except Exception as e:
         log(f"reverb_diarize import path failed ({e}); trying pyannote-pretrained fallback")
 
-                                                                                
-    from pyannote.audio import Pipeline                
-    return Pipeline.from_pretrained("Revai/reverb-diarization-v2", use_auth_token=token)
+    from pyannote.audio import Pipeline
+    return Pipeline.from_pretrained("Revai/reverb-diarization-v2", token=token)
 
 
 def main() -> None:

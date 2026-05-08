@@ -2,7 +2,7 @@
 name = "tryniq-evals-pyannote"
 version = "0.1.0"
 description = "Adapter env for pyannote.audio + SpeechBrain ECAPA-TDNN diarization."
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "pyannote.audio>=3.3",
     "speechbrain>=1.0",

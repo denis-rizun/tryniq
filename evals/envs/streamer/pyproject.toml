@@ -2,7 +2,7 @@
 name = "tryniq-evals-streamer"
 version = "0.1.0"
 description = "Adapter env for the prebuilt Swift `streamer` binary (Parakeet-TDT v2 via fluid_audio)."
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "websockets>=13.0",
     "numpy>=1.26",

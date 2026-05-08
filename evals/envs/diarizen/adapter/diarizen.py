@@ -16,9 +16,9 @@ def main() -> None:
                                                                                
     from diarizen.pipelines import SpeakerDiarization                
 
-    token = os.environ.get("HF_TOKEN")
+    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
     log(f"loading {args.model_id} (HF_TOKEN={'set' if token else 'unset'})")
-    pipeline = SpeakerDiarization.from_pretrained(args.model_id, use_auth_token=token)
+    pipeline = SpeakerDiarization.from_pretrained(args.model_id, token=token)
 
     log(f"running diarization on {args.audio}")
     diarization = pipeline(str(args.audio))

@@ -83,10 +83,14 @@ huggingface-cli login          # writes token to ~/.cache/huggingface
 
 Accept the gates for:
 
-- `pyannote/speaker-diarization-3.1`
+- `pyannote/speaker-diarization-3.1` — https://huggingface.co/pyannote/speaker-diarization-3.1
+- `pyannote/speaker-diarization-community-1` — https://huggingface.co/pyannote/speaker-diarization-community-1
+- `pyannote/segmentation-3.0` — https://huggingface.co/pyannote/segmentation-3.0 *(pulled in transitively by the diarization pipeline; gating is enforced separately)*
 - `edinburghcstr/ami`
 - `BUTSpeechFIT/diarizen-wavlm-large-s80-md`
 - `Revai/reverb-diarization-v2`
+
+For each link: log in with the same HF account that owns your `HF_TOKEN`, fill the per-repo form, click **Agree and access repository**, and wait for the green "You have been granted access" banner before re-running. The token also needs the **"Read access to contents of all public gated repos you can access"** permission (see https://huggingface.co/settings/tokens) — without that scope you'll keep hitting `GatedRepoError 403` even after acceptance.
 
 ### 2. Prepare datasets
 

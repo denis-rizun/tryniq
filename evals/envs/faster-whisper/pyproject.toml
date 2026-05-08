@@ -2,7 +2,7 @@
 name = "tryniq-evals-faster-whisper"
 version = "0.1.0"
 description = "Adapter env for faster-whisper / distil-whisper / faster-whisper-tiny + Silero VAD."
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "faster-whisper>=1.0.3",
     "soundfile>=0.12",

@@ -1,11 +1,32 @@
 
 import importlib
+import os
+from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.console import Console
 
 from eval import diar_runner, runner
+from eval.paths import EVALS_ROOT, REPO_ROOT
+
+
+def _load_dotenv(path: Path) -> None:
+    if not path.is_file():
+        return
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_dotenv(REPO_ROOT / "backend" / ".env")
+_load_dotenv(EVALS_ROOT / ".env")
 from eval.decoding import DEFAULT_DECODING, DecodingConfig
 from eval.registry import (
     DATASETS,

@@ -2,7 +2,7 @@
 name = "tryniq-evals"
 version = "0.1.0"
 description = "Model-card harness for the Open Voice Notetaker challenge — ASR + diarization comparison on M4 16GB."
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "typer>=0.12",
     "rich>=13",

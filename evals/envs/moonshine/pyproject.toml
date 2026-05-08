@@ -2,7 +2,7 @@
 name = "tryniq-evals-moonshine"
 version = "0.1.0"
 description = "Adapter env for Moonshine ONNX."
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "useful-moonshine-onnx>=0.2.0",
     "onnxruntime>=1.18",
