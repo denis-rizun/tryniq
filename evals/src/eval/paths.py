@@ -1,11 +1,3 @@
-"""Filesystem paths used by the harness.
-
-Datasets live under ``<repo>/datasets/`` by default — co-located with the
-evals/ source tree so a fresh clone can put audio next to the code rather than
-hidden in the user's home cache. ``TRYNIQ_EVALS_CACHE`` overrides the location.
-The whole ``datasets/`` directory is in ``.gitignore`` (large binary audio +
-restrictive licenses).
-"""
 
 import os
 from pathlib import Path

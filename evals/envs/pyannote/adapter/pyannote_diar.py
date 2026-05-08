@@ -1,4 +1,3 @@
-"""pyannote/speaker-diarization-3.1 adapter — emits an RTTM file."""
 
 import argparse
 import os

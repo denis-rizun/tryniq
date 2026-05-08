@@ -1,4 +1,3 @@
-"""Diarization runner: same shape as runner.run but writes RTTM and computes DER."""
 
 import json
 import platform
@@ -134,7 +133,7 @@ def run(model: Model, dataset: Dataset, *, limit: int | None = None, timeout_s: 
             "speaker_count_error": d.speaker_count_error,
             "duration_s": d.duration_s,
         })
-        # Length-weighted aggregation across meetings.
+                                                      
         der_overlap_total += d.der_with_overlap * d.duration_s
         der_no_overlap_total += d.der_no_overlap * d.duration_s
         missed_total += d.der_missed * d.duration_s
@@ -152,7 +151,7 @@ def run(model: Model, dataset: Dataset, *, limit: int | None = None, timeout_s: 
         "der": (der_overlap_total / duration_total) if duration_total > 0 else None,
         "der_with_overlap": (der_overlap_total / duration_total) if duration_total > 0 else None,
         "der_no_overlap": (der_no_overlap_total / duration_total) if duration_total > 0 else None,
-        # M5 — DER decomposition (with-overlap), length-weighted across meetings.
+                                                                                 
         "der_missed": (missed_total / duration_total) if duration_total > 0 else None,
         "der_false_alarm": (false_alarm_total / duration_total) if duration_total > 0 else None,
         "der_confusion": (confusion_total / duration_total) if duration_total > 0 else None,

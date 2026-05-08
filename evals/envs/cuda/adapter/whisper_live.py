@@ -1,14 +1,3 @@
-"""WhisperLive adapter — spawn the server as a subprocess, connect as a client.
-
-Mirrors the parakeet_fluid_audio approach: a separate server process owns the model
-and exposes a WebSocket; the adapter connects as a client, paces audio at 1×, and
-collects partials/finals back. WhisperLive ships both pieces:
-
-* server: ``python -m whisper_live.server --port <p> --backend faster_whisper``
-* client: ``whisper_live.client.TranscriptionClient`` — streams a PCM WAV.
-
-The server's WebSocket protocol is upstream-defined; we don't re-implement it here.
-"""
 
 import argparse
 import asyncio
@@ -50,8 +39,8 @@ def _spawn_server(port: int, backend: str, model: str) -> subprocess.Popen:
         "--port", str(port),
         "--backend", backend,
     ]
-    # WhisperLive's server picks the model by env or per-connection options;
-    # keep it simple and pass via env so older/newer versions both work.
+                                                                            
+                                                                        
     env = os.environ.copy()
     env["WHISPER_MODEL"] = model
     log(f"spawning whisper-live server on 127.0.0.1:{port} (backend={backend} model={model})")
@@ -59,14 +48,13 @@ def _spawn_server(port: int, backend: str, model: str) -> subprocess.Popen:
 
 
 def _transcribe(audio: Path, host: str, port: int, model: str) -> dict:
-    # Lazy import — don't load the client until we actually need to.
-    from whisper_live.client import TranscriptionClient  # type: ignore
+                                                                    
+    from whisper_live.client import TranscriptionClient                
 
     duration = audio_duration_s(audio)
     log(f"connecting whisper-live client → {host}:{port} for {audio.name} ({duration:.1f}s)")
 
-    # The upstream client streams the file at 1× by default and accumulates segments
-    # on ``self.transcript`` (a list of {start,end,text} dicts) and ``self.last_response``.
+                                                                                    
     client = TranscriptionClient(
         host, port,
         lang="en", translate=False,
@@ -74,7 +62,7 @@ def _transcribe(audio: Path, host: str, port: int, model: str) -> dict:
         save_output_recording=False,
     )
     t0 = time.perf_counter()
-    client(str(audio))  # blocking until server finishes
+    client(str(audio))                                  
     wall = time.perf_counter() - t0
 
     segments_raw: list[dict] = list(getattr(client, "transcript", []) or [])
@@ -90,9 +78,7 @@ def _transcribe(audio: Path, host: str, port: int, model: str) -> dict:
     ]
     text = " ".join(s["text"] for s in segments if s["text"]).strip()
 
-    # WhisperLive does not expose per-partial wall-clock offsets through the public
-    # client API; we record the trace of segments as we received them but the
-    # ``wall_offset_ms`` is approximated as evenly spaced over the streaming window.
+                                                                                   
     partials = []
     if segments:
         per_chunk = wall / max(len(segments), 1) * 1000.0
@@ -124,7 +110,7 @@ def main() -> None:
                     help="Server backend: faster_whisper | tensorrt | openvino")
     ap.add_argument("--model", default="large-v3")
     ap.add_argument("--server-startup-timeout-s", type=float, default=120.0)
-    # Decoding-config flags — accepted for fairness wrapper compatibility.
+                                                                          
     ap.add_argument("--beam-size", type=int, default=1)
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--language", default="en")

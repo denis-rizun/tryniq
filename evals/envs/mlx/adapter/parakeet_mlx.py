@@ -1,4 +1,3 @@
-"""NVIDIA Parakeet-TDT-0.6B-v2 offline batch via parakeet-mlx (Apple Silicon)."""
 
 import argparse
 import time
@@ -34,7 +33,7 @@ def main() -> None:
     ap.add_argument("--audio", type=Path)
     ap.add_argument("--warm-stdin", action="store_true")
     ap.add_argument("--model-id", default="mlx-community/parakeet-tdt-0.6b-v2")
-    # Decoding-config flags — Parakeet-MLX doesn't expose beam/temperature; accept and ignore.
+                                                                                              
     ap.add_argument("--beam-size", type=int, default=1)
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--language", default="en")

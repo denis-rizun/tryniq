@@ -1,4 +1,3 @@
-"""faster-whisper / distil-whisper adapter (CTranslate2)."""
 
 import argparse
 import time
@@ -48,7 +47,7 @@ def main() -> None:
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--language", default="en")
     ap.add_argument("--beam-size", type=int, default=5)
-    # Decoding-config flags we don't honor — accepted for fairness wrapper compatibility.
+                                                                                         
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--vad-aggressiveness", type=int, default=2)
     ap.add_argument("--pace", default="realtime")

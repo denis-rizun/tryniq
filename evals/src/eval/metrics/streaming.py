@@ -1,19 +1,3 @@
-"""Streaming-ASR quality metrics computed from a list of partial hypotheses.
-
-Two metrics:
-
-* **Stability ratio** — fraction of partials whose text is a *prefix* of the
-  next partial covering the same audio extent. Higher is better (less rewriting).
-* **Median rewrite distance (words)** — Levenshtein-on-tokens between consecutive
-  partials' tail (the suffix that changed). Lower is better.
-
-Both are computed per-utterance, then aggregated as a simple mean across utterances
-(unweighted — these are intrinsically per-stream quality numbers, not per-word).
-
-* **Real-time latency p50/p95** — `wall_offset_ms - audio_t_end_s*1000` over partials.
-  Negative values mean the adapter ran ahead of real time (paced too fast); for a
-  1×-paced adapter this is the user-perceived delay.
-"""
 
 from dataclasses import dataclass
 
@@ -43,7 +27,6 @@ def _token_levenshtein(a: list[str], b: list[str]) -> int:
 
 
 def _utterance_stability(partials: list[dict]) -> tuple[float, float]:
-    """Returns (stability_ratio, median_rewrite_words) for one utterance's trace."""
     if len(partials) < 2:
         return 1.0, 0.0
     stable = 0
@@ -72,11 +55,6 @@ def _percentile(values: list[float], p: float) -> float | None:
 
 
 def aggregate(per_utt_partials: list[list[dict]]) -> StreamingStats:
-    """Aggregate streaming stats across utterances.
-
-    Each list element is the ``partials`` field for one utterance (list of dicts
-    with keys ``text``, ``audio_t_end_s``, ``wall_offset_ms``).
-    """
     stabilities: list[float] = []
     rewrites: list[float] = []
     realtime_lags: list[float] = []

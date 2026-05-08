@@ -1,13 +1,3 @@
-"""Static registry of models and datasets.
-
-Each `Model` entry maps to a subprocess invocation: `cd envs/<family> && uv run python -m <module> ...`.
-Adding a new model = adding a row here + a script under `envs/<env>/adapter/`.
-
-The lineup is intentionally narrow — three models per family — so the model card
-answers a clear question per slot. Speaker-embedding / verification (ECAPA) is
-registered but excluded from the diarization comparison via ``in_comparison=False``;
-it doesn't represent the production diarization choice.
-"""
 
 from dataclasses import dataclass, field
 from typing import Literal
@@ -31,12 +21,12 @@ class Model:
     name: str
     family: ModelFamily
     env: EnvName
-    adapter_module: str  # `adapter.<file>` invoked as `python -m`
+    adapter_module: str                                           
     extra_args: tuple[str, ...] = ()
     description: str = ""
     license: str = ""
-    release_date: str = ""  # ISO YYYY-MM-DD; "" if unknown
-    in_comparison: bool = True  # False = registered but excluded from MODEL_CARD tables
+    release_date: str = ""                                 
+    in_comparison: bool = True                                                          
 
 
 @dataclass(frozen=True)
@@ -49,7 +39,7 @@ class Dataset:
 
 
 MODELS: list[Model] = [
-    # ---------- Final-pass ASR ----------
+                                          
     Model(
         name="faster_whisper_large_v3_turbo",
         family="final",
@@ -70,10 +60,8 @@ MODELS: list[Model] = [
         license="CC-BY-4.0",
         release_date="2025-07-01",
     ),
-    # Same model as the Mac default, but on CUDA fp16 — answers "what does our
-    # production final-pass look like on a real GPU instead of M4 int8 CPU".
-    # Both rows are kept ``in_comparison=True`` so the model card surfaces the
-    # M4-vs-CUDA delta directly.
+                                                                              
+                                                                            
     Model(
         name="faster_whisper_large_v3_turbo_cuda",
         family="final",
@@ -98,7 +86,7 @@ MODELS: list[Model] = [
         release_date="2025-06-01",
     ),
 
-    # ---------- Live-pass ASR ----------
+                                         
     Model(
         name="parakeet_fluid_audio",
         family="live",
@@ -129,7 +117,7 @@ MODELS: list[Model] = [
         release_date="2024-04-01",
     ),
 
-    # ---------- Diarization (comparison triple) ----------
+                                                           
     Model(
         name="diarizen",
         family="diarization",
@@ -137,7 +125,7 @@ MODELS: list[Model] = [
         adapter_module="adapter.diarizen",
         extra_args=("--model-id", "BUTSpeechFIT/diarizen-wavlm-large-s80-md"),
         description="Production model. EEND via DiariZen (BUT Speech).",
-        license="MIT",  # DiariZen MIT; weights vary — confirm on HF.
+        license="MIT",                                               
         release_date="2024-12-01",
     ),
     Model(
@@ -160,7 +148,7 @@ MODELS: list[Model] = [
         release_date="2024-09-01",
     ),
 
-    # ---------- Registered but not in the comparison table ----------
+                                                                      
     Model(
         name="ecapa_speechbrain",
         family="diarization",
@@ -222,12 +210,10 @@ def get_dataset(name: str) -> Dataset:
 
 
 def models_for_family(family: ModelFamily) -> list[Model]:
-    """All models in a family, including those flagged ``in_comparison=False``."""
     return [m for m in MODELS if m.family == family]
 
 
 def comparison_models_for_family(family: ModelFamily) -> list[Model]:
-    """Only the models that should appear in the model-card comparison table."""
     return [m for m in MODELS if m.family == family and m.in_comparison]
 
 

@@ -1,4 +1,3 @@
-"""Peak-RSS sampler. Polls the subprocess every 100ms; reports max in MB."""
 
 import threading
 import time
@@ -12,8 +11,8 @@ class MemorySampler:
     pid: int
     interval_s: float = 0.1
     peak_rss_mb: float = 0.0
-    _stop: threading.Event = None  # type: ignore[assignment]
-    _thread: threading.Thread = None  # type: ignore[assignment]
+    _stop: threading.Event = None                            
+    _thread: threading.Thread = None                            
 
     def start(self) -> None:
         self._stop = threading.Event()
@@ -28,7 +27,7 @@ class MemorySampler:
         while not self._stop.is_set():
             try:
                 rss_mb = proc.memory_info().rss / (1024 * 1024)
-                # Include children (model loaders sometimes fork).
+                                                                  
                 for child in proc.children(recursive=True):
                     try:
                         rss_mb += child.memory_info().rss / (1024 * 1024)

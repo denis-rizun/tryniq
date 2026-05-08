@@ -1,4 +1,3 @@
-"""Typer CLI: prepare datasets, run model × dataset, regenerate reports."""
 
 import importlib
 from typing import Annotated
@@ -24,7 +23,6 @@ console = Console()
 
 @app.command(name="list")
 def list_cmd() -> None:
-    """List registered models and datasets."""
     console.print("[bold]Models[/bold]")
     for m in MODELS:
         console.print(f"  [cyan]{m.name:<35}[/cyan] family={m.family:<12} env={m.env:<16} {m.description}")
@@ -45,7 +43,6 @@ def prepare(
     max_utterances: Annotated[int | None, typer.Option(help="Cap (smoke runs).")] = None,
     max_meetings: Annotated[int | None, typer.Option(help="Cap (multi-speaker datasets).")] = None,
 ) -> None:
-    """Download/normalize a dataset into ~/.cache/tryniq-evals/<dataset>/."""
     ds = get_dataset(dataset)
     mod = importlib.import_module(f"eval.datasets.{ds.name}")
     kwargs: dict = {}
@@ -80,12 +77,11 @@ def run(
     vad_aggressiveness: Annotated[int, typer.Option()] = DEFAULT_DECODING.vad_aggressiveness,
     pace: Annotated[str, typer.Option(help='"realtime" or "fast" (live family).')] = DEFAULT_DECODING.pace,
 ) -> None:
-    """Run one model on one dataset; write results/<run_id>/."""
     m = get_model(model)
     d = get_dataset(dataset)
     decoding = _decoding_from_cli(beam_size, temperature, language, vad_aggressiveness, pace)
     if m.family == "diarization":
-        # Diarization runner is process-per-meeting today; decoding flags are not applicable.
+                                                                                             
         path = diar_runner.run(m, d, limit=limit, timeout_s=timeout)
     else:
         path = runner.run(m, d, limit=limit, timeout_s=timeout, warm=warm, decoding=decoding)
@@ -104,10 +100,6 @@ def run_family(
     vad_aggressiveness: Annotated[int, typer.Option()] = DEFAULT_DECODING.vad_aggressiveness,
     pace: Annotated[str, typer.Option()] = DEFAULT_DECODING.pace,
 ) -> None:
-    """Run every model in a family across every applicable dataset.
-
-    Exits non-zero if any (model, dataset) pair fails so CI can detect failure.
-    """
     models = models_for_family(family)
     datasets = datasets_for_family(family)
     decoding = _decoding_from_cli(beam_size, temperature, language, vad_aggressiveness, pace)
@@ -123,7 +115,7 @@ def run_family(
                 else:
                     runner.run(m, d, limit=limit, timeout_s=timeout, warm=warm, decoding=decoding)
                 successes += 1
-            except Exception as e:  # noqa: BLE001 — broad: surface every failure
+            except Exception as e:                                               
                 console.print(f"  [red]failed[/red]: {e}")
                 failures.append((m.name, d.name, str(e)))
 
@@ -139,7 +131,6 @@ def run_family(
 
 @app.command()
 def report() -> None:
-    """Regenerate RESULTS.md and the auto-generated tables in MODEL_CARD.md."""
     from eval import report as report_mod
     report_mod.generate()
     console.print("[green]Regenerated[/green] RESULTS.md and MODEL_CARD.md tables.")

@@ -1,4 +1,3 @@
-"""Real-time factor: wall-clock seconds per audio second. Lower is faster."""
 
 
 def rtf(wall_s: float, audio_s: float) -> float:

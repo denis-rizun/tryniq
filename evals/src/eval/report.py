@@ -1,4 +1,3 @@
-"""Aggregate results/<run_id>/summary.json files into RESULTS.md and MODEL_CARD.md tables."""
 
 import json
 import re
@@ -13,18 +12,10 @@ _MODEL_CARD = EVALS_ROOT / "MODEL_CARD.md"
 
 
 def _collect() -> dict[str, dict[str, dict]]:
-    """Returns {model_name: {dataset_name: chosen_summary}}.
-
-    Within identical decoding configs and limits, the latest run wins. Across
-    different (decoding_hash, limit) buckets for the same (model, dataset), the
-    bucket with the most samples wins — so a 50-sample smoke run never silently
-    clobbers a full-dataset run, and a stale decoding config never beats a fresh
-    one with the same coverage.
-    """
     if not RESULTS_ROOT.exists():
         return defaultdict(dict)
 
-    # bucket = (model, dataset, decoding_hash, limit) -> latest summary by run_id sort
+                                                                                      
     buckets: dict[tuple[str, str, str, str], dict] = {}
     for run_dir in sorted(RESULTS_ROOT.iterdir()):
         summary_path = run_dir / "summary.json"
@@ -43,15 +34,15 @@ def _collect() -> dict[str, dict[str, dict]]:
             except Exception:
                 pass
         key = (s["model"], s["dataset"], decoding_hash, limit_key)
-        buckets[key] = s  # sorted iteration → latest wins
+        buckets[key] = s                                  
 
-    # Pick best bucket per (model, dataset): max n_samples, ties broken by recency.
+                                                                                   
     out: dict[str, dict[str, dict]] = defaultdict(dict)
     by_pair: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for (model, dataset, _h, _l), summary in buckets.items():
         by_pair[(model, dataset)].append(summary)
     for (model, dataset), summaries in by_pair.items():
-        # Higher n_samples first; then by run_id (lex-sortable timestamp prefix) desc.
+                                                                                      
         summaries.sort(
             key=lambda s: (s.get("n_samples", 0), s.get("run_id", "")),
             reverse=True,
@@ -81,7 +72,7 @@ def _fmt_wer_with_ci(s: dict) -> str:
 
 
 def _table_for_family(family: str, results: dict[str, dict[str, dict]]) -> str:
-    models = comparison_models_for_family(family)  # type: ignore[arg-type]
+    models = comparison_models_for_family(family)                          
     if not models:
         return "_no models registered_"
 
@@ -125,8 +116,7 @@ def _table_for_family(family: str, results: dict[str, dict[str, dict]]) -> str:
             "so numbers aren't comparable. Per-meeting RSS lives in ``results/<run_id>/per_meeting.json``._"
         )
 
-    # ASR families: per-dataset WER + S/D/I + tail + RTF;
-    # live also shows per-dataset first-partial / commit lag.
+                                                         
     header_parts = ["Model", "License", "Released"]
     for d in datasets:
         header_parts += [f"WER {d}", f"S/D/I {d}", f"Tail p90/p95 {d}", f"RTF {d}", f"Load(s) {d}"]
@@ -156,8 +146,8 @@ def _table_for_family(family: str, results: dict[str, dict[str, dict]]) -> str:
                     f"{_fmt(p90)} / {_fmt(p95)}"
                     if p90 is not None else "—"
                 )
-                # Prefer steady_rtf (excludes cold load) when available; fall back
-                # to the conflated rtf for legacy / fluid_audio runs.
+                                                                                  
+                                                                     
                 rtf_val = s.get("steady_rtf")
                 if rtf_val is None:
                     rtf_val = s.get("rtf", 0.0)
@@ -200,7 +190,7 @@ def generate() -> None:
     table_live = _table_for_family("live", results)
     table_diar = _table_for_family("diarization", results)
 
-    # ---- MODEL_CARD.md ----
+                             
     if _MODEL_CARD.exists():
         text = _MODEL_CARD.read_text()
         text = _replace_block(text, "TABLE_FINAL", table_final)
@@ -208,7 +198,7 @@ def generate() -> None:
         text = _replace_block(text, "TABLE_DIAR", table_diar)
         _MODEL_CARD.write_text(text)
 
-    # ---- RESULTS.md ----
+                          
     blocks = [
         "## Final-pass ASR\n\n" + table_final,
         "\n\n## Live-pass ASR\n\n" + table_live,

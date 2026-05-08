@@ -1,30 +1,3 @@
-"""Parakeet-TDT v2 via the prebuilt Swift `streamer` binary.
-
-Architecture
-------------
-The streamer is a WebSocket *client* that connects to ``${BACKEND_WS_URL}/asr/sessions``
-(see streamer/.env.example and streamer/src/BackendSocket.swift). To run it standalone
-inside ``evals/`` we stand up a tiny in-process WebSocket server that mimics the api's
-``/asr/sessions`` endpoint, spawn the streamer pointed at us, send a ``stream_open``,
-pump PCM frames at 1× pace (or as fast as possible), and collect ``partial``/``final``
-events back. Standalone-ness rule: ``backend/`` need not exist on disk; we duplicate
-the wire constants below with a comment pointing at the canonical source.
-
-Wire format (canonical source: backend/app/asr/schemas.py + backend/app/asr/constants.py):
-
-* JSON envelopes use ``kind`` discriminator: hello, stream_open, stream_close, partial,
-  final, ping. Field names are snake_case.
-* Server → streamer also carries binary PCM frames: 8-byte little-endian header
-  (``<II`` = stream_idx, seq) + raw int16 LE PCM at 16 kHz mono.
-* The api authenticates the streamer via ``?token=…`` query param matching
-  ``ASR_LIVE_AUTH_TOKEN``. We accept any token here — there's no secret to enforce.
-
-Pacing modes:
-
-* ``--pace realtime`` (default for live family): send PCM at audio-timeline pace.
-  ``time_to_first_partial_ms`` is then meaningful as user-perceived latency.
-* ``--pace fast``: send PCM as fast as the streamer drains. Better for offline WER.
-"""
 
 import argparse
 import asyncio
@@ -44,11 +17,11 @@ from websockets.asyncio.server import ServerConnection, serve as ws_serve
 
 from adapter._base import audio_duration_s, emit_ready, log, serve as adapter_serve
 
-# ---- Wire constants (mirror backend/app/asr/constants.py) ----------------------
+                                                                                  
 AUDIO_FRAME_HEADER_FMT = "<II"
 AUDIO_FRAME_HEADER_LEN = struct.calcsize(AUDIO_FRAME_HEADER_FMT)
 SAMPLE_RATE = 16000
-FRAME_SAMPLES = 320  # 20 ms @ 16 kHz; matches the api's ingest framing.
+FRAME_SAMPLES = 320                                                     
 EVENT_HELLO = "hello"
 EVENT_STREAM_OPEN = "stream_open"
 EVENT_STREAM_CLOSE = "stream_close"
@@ -56,7 +29,7 @@ EVENT_PARTIAL = "partial"
 EVENT_FINAL = "final"
 EVENT_PING = "ping"
 
-STREAMER_BIN_ENV = "TRYNIQ_STREAMER_BIN"  # override; default is `streamer` on $PATH
+STREAMER_BIN_ENV = "TRYNIQ_STREAMER_BIN"                                            
 
 
 @dataclass
@@ -70,7 +43,6 @@ class _Capture:
 
 
 def _resample_int16(audio_path: Path) -> np.ndarray:
-    """Read audio, downmix to mono, resample to 16 kHz, return int16."""
     audio, sr = sf.read(str(audio_path), dtype="float32", always_2d=False)
     if audio.ndim > 1:
         audio = audio.mean(axis=1)
@@ -108,13 +80,12 @@ async def _drive_session(
     pace: str,
     settle_s: float,
 ) -> None:
-    """One streamer connection: await hello, send stream_open + PCM, collect events."""
     stream_id = uuid.uuid4()
     meeting_id = uuid.uuid4()
     stream_idx = 0
     seq = 0
 
-    # Phase 1: wait for the streamer's hello.
+                                             
     hello_seen = False
     async for msg in ws:
         if isinstance(msg, str):
@@ -129,7 +100,7 @@ async def _drive_session(
     if not hello_seen:
         return
 
-    # Phase 2: open the stream.
+                               
     await ws.send(_json_dump({
         "kind": EVENT_STREAM_OPEN,
         "meeting_id": str(meeting_id),
@@ -141,7 +112,7 @@ async def _drive_session(
         "encoding": "pcm_s16le",
     }))
 
-    # Phase 3: producer (paces PCM) + consumer (logs partials/finals) run together.
+                                                                                   
     cap.final_audio_t_end = len(pcm) / SAMPLE_RATE
 
     async def producer() -> None:
@@ -165,7 +136,7 @@ async def _drive_session(
                 drift = next_send - time.perf_counter()
                 if drift > 0:
                     await asyncio.sleep(drift)
-        # Tell the streamer this stream is over so it can emit any pending final.
+                                                                                 
         try:
             await ws.send(_json_dump({"kind": EVENT_STREAM_CLOSE, "stream_id": str(stream_id)}))
         except websockets.ConnectionClosed:
@@ -203,7 +174,7 @@ async def _drive_session(
     prod_task = asyncio.create_task(producer())
     cons_task = asyncio.create_task(consumer())
     await prod_task
-    # Give the streamer a settle window to emit the trailing finals.
+                                                                    
     try:
         await asyncio.wait_for(cons_task, timeout=settle_s)
     except asyncio.TimeoutError:
@@ -229,10 +200,7 @@ def _build_hypothesis(audio_path: Path, cap: _Capture) -> dict:
     ]
     text = " ".join(s["text"] for s in segments if s["text"])
 
-    # Streaming partials trace — combine partials + finals in arrival order.
-    # Finals carry t_end natively; partials don't, so we use the most-recently-seen
-    # final t_end as a lower bound, falling back to the partial's own ``timestamp``
-    # if present, else the audio time elapsed at the wall offset (1× pacing assumption).
+                                                                            
     partials_trace: list[dict] = []
     last_audio_t_end = 0.0
     combined = sorted(
@@ -243,7 +211,7 @@ def _build_hypothesis(audio_path: Path, cap: _Capture) -> dict:
         is_final = env.get("kind") == EVENT_FINAL
         t_end = env.get("t_end")
         if t_end is None:
-            # 1× pacing: audio time elapsed ≈ wall offset (frames sent are paced to audio rate).
+                                                                                                
             t_end = float(env.get("_wall_offset_ms", 0.0)) / 1000.0
         last_audio_t_end = max(last_audio_t_end, float(t_end))
         partials_trace.append({
@@ -294,7 +262,7 @@ async def _transcribe_async(
     env = os.environ.copy()
     env["BACKEND_WS_URL"] = f"ws://127.0.0.1:{port}"
     env.setdefault("WORKER_TOKEN", "eval-token")
-    # Sensible streamer defaults for benchmarking.
+                                                  
     env.setdefault("ASR_CHUNK_S", "2.0")
     env.setdefault("ASR_RIGHT_CTX_S", "1.0")
     env.setdefault("ASR_LEFT_CTX_S", "5.0")
@@ -338,7 +306,7 @@ def main() -> None:
                     help="Seconds to wait after audio ends for trailing finals.")
     ap.add_argument("--handshake-timeout-s", type=float, default=300.0,
                     help="Max wall-time for the full session (audio + settle).")
-    # Decoding-config flags — streamer is configured via env vars; accept and ignore.
+                                                                                     
     ap.add_argument("--beam-size", type=int, default=1)
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--language", default="en")
@@ -352,9 +320,8 @@ def main() -> None:
         sys.exit(2)
 
     log(f"using streamer binary: {binary}")
-    # The Swift binary loads its model on every transcribe_one (one spawn per call),
-    # so there's no Python-side cold load to report. We still signal ready so warm
-    # mode doesn't block on the runner's _wait_for_ready loop. See PLAN.md M4.
+                                                                                    
+                                                                                  
     emit_ready(None)
 
     def transcribe_one(audio: Path) -> dict:

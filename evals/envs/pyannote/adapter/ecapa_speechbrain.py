@@ -1,9 +1,3 @@
-"""SpeechBrain ECAPA-TDNN diarization: VAD-segment → embed → agglomerative-cluster.
-
-This is the "minimal honest" implementation of what backend/ documents in PRD §10:
-ECAPA embeddings are the speaker representation; clustering decides identity. We pair it
-with a VAD pass (Silero via pyannote) so we don't embed silence. Output: RTTM.
-"""
 
 import argparse
 from pathlib import Path
@@ -23,12 +17,12 @@ EMBED_HOP_S = 0.75
 
 
 def _load_vad() -> Pipeline:
-    # pyannote's VAD pipeline is a clean prebuilt path. Falls back to no-VAD if unavailable.
+                                                                                            
     try:
         return Pipeline.from_pretrained("pyannote/voice-activity-detection")
     except Exception as e:
         log(f"VAD load failed ({e}); will treat full audio as voiced")
-        return None  # type: ignore[return-value]
+        return None                              
 
 
 def _voiced_segments(vad: Pipeline | None, audio_path: Path, total_dur: float) -> list[tuple[float, float]]:
@@ -109,7 +103,7 @@ def main() -> None:
     log(f"clustering {len(embeddings)} embeddings (threshold={args.threshold})")
     labels = _cluster(np.stack(embeddings), args.threshold)
 
-    # Merge consecutive same-label windows.
+                                           
     merged: list[tuple[float, float, int]] = []
     for (start, end), label in zip(windows, labels, strict=True):
         if merged and merged[-1][2] == label and start <= merged[-1][1] + 0.05:

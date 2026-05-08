@@ -1,4 +1,3 @@
-"""Read/write the per-dataset manifest.jsonl format consumed by the runner."""
 
 import json
 from collections.abc import Iterator
@@ -6,14 +5,11 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-# STM format: <filename> <channel> <speaker> <begin> <end> [<label>] <text>
-# Lines starting with `;;` are comments. Some toolchains emit a 6-column form
-# (no <label>); both AMI's pseudo-STM and the canonical Sclite STM are supported.
+                                                                           
 _STM_IGNORE_TOKENS = {"ignore_time_segment_in_scoring", "<no-speech>", "(()", "()"}
 
 
 def parse_stm(path: Path) -> str:
-    """Extract the concatenated text column from an STM file."""
     out: list[str] = []
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
@@ -34,10 +30,6 @@ def parse_stm(path: Path) -> str:
 
 
 def read_reference(text_field: str) -> str:
-    """Resolve a manifest `text` field into the actual reference string.
-
-    The field is either inline text or a path to .stm/.txt holding the reference.
-    """
     p = Path(text_field)
     if p.exists() and p.is_file():
         if p.suffix == ".stm":
@@ -50,8 +42,8 @@ def read_reference(text_field: str) -> str:
 class Sample(BaseModel):
     id: str
     audio: str
-    text: str  # ground-truth transcript OR path to a .stm/.txt file (for long-form)
-    speakers: str | None = None  # path to RTTM ground truth (for diarization datasets)
+    text: str                                                                       
+    speakers: str | None = None                                                        
     duration_s: float | None = None
     extras: dict[str, object] = Field(default_factory=dict)
 

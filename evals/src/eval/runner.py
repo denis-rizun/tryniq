@@ -1,18 +1,3 @@
-"""Runs one model × one dataset, writes results/<run_id>/.
-
-Each adapter executes in its own uv env via subprocess. The wire contract is
-defined in ``envs/<family>/adapter/_base.py``: the adapter writes ``---HYPOTHESIS-JSON---``
-on its own line, then a single JSON line. Anything else on stdout/stderr is chatter
-and ignored (captured into errors.log on failure).
-
-Two modes:
-
-* **cold** (default): one subprocess per sample. Honest first-utterance latency
-  but RTF is dominated by repeated model loads.
-* **warm** (``--warm``): one subprocess per (model, dataset). The runner pipes
-  audio paths to stdin one per line; the adapter emits one ``sentinel + JSON``
-  pair per line. Fair steady-state RTF but no per-utterance cold-load timing.
-"""
 
 import csv
 import json
@@ -52,8 +37,6 @@ def _git_sha() -> str:
         return "unknown"
 
 
-# Process-lifetime cache: `uv pip freeze --project envs/<env>` is invariant for
-# the duration of a session, so we shell out at most once per env.
 _FREEZE_CACHE: dict[str, list[str]] = {}
 
 
@@ -95,18 +78,12 @@ def _audio_duration(path: Path) -> float:
 
 
 def _read_text_reference(text_field: str) -> str:
-    """Resolve a manifest text field (inline string OR path to .stm/.txt)."""
     return read_reference(text_field)
 
 
 def _adapter_command(
     model: Model, audio: str | None, decoding: DecodingConfig
 ) -> tuple[list[str], Path]:
-    """Build the subprocess command + cwd. Pass audio=None for warm-stdin mode.
-
-    Order: ``--audio`` (if cold) → decoding flags → registry's ``extra_args``.
-    Per-model overrides win because argparse keeps the last occurrence.
-    """
     env_dir = ENVS_ROOT / model.env
     cmd = ["uv", "run", "python", "-m", model.adapter_module]
     if audio is not None:
@@ -117,7 +94,6 @@ def _adapter_command(
 
 
 def _extract_hypothesis(stdout: str) -> tuple[Hypothesis | None, str]:
-    """Find the last sentinel-prefixed JSON line in stdout."""
     lines = stdout.splitlines()
     for i in range(len(lines) - 1, -1, -1):
         if lines[i].strip() == HYPOTHESIS_SENTINEL and i + 1 < len(lines):
@@ -130,12 +106,6 @@ def _extract_hypothesis(stdout: str) -> tuple[Hypothesis | None, str]:
 
 
 def _extract_load_s(stdout: str) -> float | None:
-    """Find the first ``---ADAPTER-READY---`` block and return its ``load_s``.
-
-    Adapters that don't emit ready (e.g. ``parakeet_fluid_audio`` — see PLAN.md M4
-    open question 2) yield ``None``, which the runner records faithfully rather
-    than approximating. Subsequent reporting can flag those as ``cold_load_s=null``.
-    """
     lines = stdout.splitlines()
     for i, line in enumerate(lines):
         if line.strip() == READY_SENTINEL and i + 1 < len(lines):
@@ -179,12 +149,6 @@ def _run_cold(
 
 
 class _WarmAdapter:
-    """Long-lived adapter subprocess fed audio paths over stdin.
-
-    Sample timing is bracketed around stdin write → next sentinel-tagged JSON.
-    Memory sampling spans the entire adapter lifetime; per-sample peak is not
-    isolated (acceptable trade-off for warm-mode honesty).
-    """
 
     def __init__(self, model: Model, timeout_s: float, decoding: DecodingConfig) -> None:
         cmd, cwd = _adapter_command(model, audio=None, decoding=decoding)
@@ -198,19 +162,12 @@ class _WarmAdapter:
         self.sampler = MemorySampler(pid=self.proc.pid)
         self.sampler.start()
         self.stderr_buf: list[str] = []
-        # M4 — capture cold-load time once, before the first transcribe call.
-        # We wait at most ``timeout_s`` for the adapter to print its READY block;
-        # if it never does (older adapter) we fall through with cold_load_s=None.
+                                                                             
+                                                                                 
         self.cold_load_s: float | None = None
         self._wait_for_ready()
 
     def _wait_for_ready(self) -> None:
-        """Drain stdout until the adapter signals READY (or it dies first).
-
-        Adapters call ``emit_ready()`` after model load, before reading from
-        stdin. We treat any non-ready line as warm-up chatter that the adapter
-        was still printing during load; everything is forwarded for visibility.
-        """
         assert self.proc.stdout is not None
         deadline = time.monotonic() + self.timeout_s
         while time.monotonic() < deadline:
@@ -236,7 +193,7 @@ class _WarmAdapter:
             wall = time.perf_counter() - t0
             return None, "adapter stdin closed (subprocess died)", wall
 
-        # Read until we see the sentinel followed by a JSON line.
+                                                                 
         deadline = time.monotonic() + self.timeout_s
         sentinel_seen = False
         while time.monotonic() < deadline:
@@ -280,7 +237,6 @@ def run(
     warm: bool = False,
     decoding: DecodingConfig | None = None,
 ) -> Path:
-    """Execute model on dataset; return path to the run directory."""
     decoding = decoding or DEFAULT_DECODING
     manifest_path = dataset_cache(dataset.name) / "manifest.jsonl"
     if not manifest_path.exists():
@@ -307,7 +263,7 @@ def run(
     per_utt_partials: list[list[dict]] = []
     first_partials: list[float | None] = []
     commit_lags: list[float | None] = []
-    cold_loads: list[float] = []  # cold-mode: per-sample reload time.
+    cold_loads: list[float] = []                                      
     peak_rss_max = 0.0
     errors_log: list[str] = []
     total_audio_s = 0.0
@@ -371,16 +327,12 @@ def run(
             if warm_stderr:
                 errors_log.append(f"[adapter-stderr]\n{warm_stderr}")
 
-    # ---- Persist ----
+                       
     agg = wer_metric.aggregate(per_utt_wer, per_utt_audio_s)
     lat = agg_latency(first_partials, commit_lags)
     stream = streaming_metric.aggregate(per_utt_partials)
 
-    # M4 — cold-load split. Warm: load happens once before any sample, captured
-    # by ``_WarmAdapter.cold_load_s`` and excluded from per-sample wall_s.
-    # Cold: each sample's wall_s includes a fresh load; we subtract it to get
-    # steady_rtf. Adapters that don't emit ready (e.g. fluid_audio) report
-    # cold_load_s=None and steady_rtf falls back to the conflated rtf.
+                                                                               
     if warm:
         cold_load_s_total: float | None = (
             warm_adapter.cold_load_s if warm_adapter is not None else None
@@ -388,8 +340,8 @@ def run(
         steady_wall_s = total_wall_s
     else:
         cold_load_s_total = sum(cold_loads) / len(cold_loads) if cold_loads else None
-        # Subtract every observed per-sample load. If only some samples reported,
-        # we still subtract those — partial honesty beats none.
+                                                                                 
+                                                               
         steady_wall_s = max(0.0, total_wall_s - sum(cold_loads))
     steady_rtf = compute_rtf(steady_wall_s, total_audio_s)
 
@@ -403,7 +355,7 @@ def run(
         "audio_seconds_total": total_audio_s,
         "wall_seconds_total": total_wall_s,
         "rtf": compute_rtf(total_wall_s, total_audio_s),
-        # M4 — cold-load and steady-state split.
+                                                
         "cold_load_s": cold_load_s_total,
         "steady_rtf": steady_rtf,
         "n_cold_load_samples": len(cold_loads) if not warm else (1 if cold_load_s_total is not None else 0),
@@ -415,20 +367,20 @@ def run(
         "wer_normalized_ci_low": agg.wer_normalized_ci_low,
         "wer_normalized_ci_high": agg.wer_normalized_ci_high,
         "n_bootstrap": agg.n_bootstrap,
-        # M1 — S/D/I rates (fractions of words_ref).
+                                                    
         "subs_rate": agg.subs_rate,
         "dels_rate": agg.dels_rate,
         "ins_rate": agg.ins_rate,
         "subs_rate_normalized": agg.subs_rate_normalized,
         "dels_rate_normalized": agg.dels_rate_normalized,
         "ins_rate_normalized": agg.ins_rate_normalized,
-        # M2 — per-utterance normalized-WER percentiles (gated by min_ref_words).
+                                                                                 
         "per_utt_wer_norm_p50": agg.per_utt_wer_norm_p50,
         "per_utt_wer_norm_p90": agg.per_utt_wer_norm_p90,
         "per_utt_wer_norm_p95": agg.per_utt_wer_norm_p95,
         "per_utt_n_eligible": agg.per_utt_n_eligible,
         "per_utt_min_ref_words": agg.per_utt_min_ref_words,
-        # M3 — by-length-bucket aggregates.
+                                           
         "wer_by_length": [asdict(b) for b in agg.by_length],
         "median_first_partial_ms": lat.median_first_partial_ms,
         "p95_first_partial_ms": lat.p95_first_partial_ms,
@@ -476,7 +428,7 @@ def run(
     if errors_log:
         (run_dir / "errors.log").write_text("\n\n".join(errors_log))
 
-    # M7 — worst utterances by per-utt WER for qualitative review.
+                                                                  
     scored_rows = [r for r in per_utt_rows if r.get("wer_norm") is not None]
     worst_rows = sorted(scored_rows, key=lambda r: r["wer_norm"], reverse=True)[:10]
     worst_dump = [

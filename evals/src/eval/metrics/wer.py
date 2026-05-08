@@ -1,17 +1,3 @@
-"""WER / CER computation, raw and Whisper-normalized, with bootstrap confidence intervals.
-
-Per-run aggregates also expose:
-* S/D/I rates (substitutions / deletions / insertions) on raw and normalized text,
-  so callers can tell over-deletion (Whisper-family) from over-insertion (CTC).
-* Per-utterance normalized-WER percentiles (p50/p90/p95) over utterances with at
-  least ``MIN_REF_WORDS_FOR_PERCENTILES`` reference words. Below that threshold a
-  single error swamps the rate (1 error in 3 words = 33 %), so short utterances
-  dominate percentiles in non-meaningful ways. Threshold is fixed by design — see
-  PLAN.md M2 open question 3.
-* Aggregates-by-audio-length-bucket (``<5s``, ``5–15s``, ``>15s``,
-  ``long_form_60s+``) with their own bootstrap CIs. Surfaces long-form drift,
-  the #1 deciding factor for Whisper-family on real meetings.
-"""
 
 from dataclasses import dataclass, field
 
@@ -24,10 +10,10 @@ _normalizer = EnglishTextNormalizer()
 _BOOTSTRAP_RESAMPLES = 1000
 _BOOTSTRAP_RNG = np.random.default_rng(seed=42)
 
-# See module docstring for rationale.
+                                     
 MIN_REF_WORDS_FOR_PERCENTILES = 5
 
-# (label, lo_inclusive, hi_exclusive) — last bucket has hi=None for "open ended".
+                                                                                 
 _LENGTH_BUCKETS: tuple[tuple[str, float, float | None], ...] = (
     ("lt_5s", 0.0, 5.0),
     ("5_15s", 5.0, 15.0),
@@ -44,16 +30,16 @@ class WerResult:
     cer_normalized: float
     words_ref: int
     words_hyp: int
-    word_errors: int  # S+D+I, raw
+    word_errors: int              
     word_errors_normalized: int
     chars_ref: int
     char_errors: int
     char_errors_normalized: int
-    # S / D / I split — raw alignment (against the original reference).
+                                                                       
     subs: int
     dels: int
     ins: int
-    # S / D / I split — Whisper-normalized alignment (the headline number's split).
+                                                                                   
     subs_normalized: int
     dels_normalized: int
     ins_normalized: int
@@ -77,29 +63,28 @@ class WerAggregate:
     cer_normalized: float
     words_ref: int
     words_hyp: int
-    # 95% bootstrap CI on the normalized WER (the headline number).
+                                                                   
     wer_normalized_ci_low: float | None
     wer_normalized_ci_high: float | None
     n_bootstrap: int
-    # M1 — S/D/I rates as fractions of words_ref.
+                                                 
     subs_rate: float
     dels_rate: float
     ins_rate: float
     subs_rate_normalized: float
     dels_rate_normalized: float
     ins_rate_normalized: float
-    # M2 — per-utterance normalized-WER percentiles, gated by min_ref_words.
+                                                                            
     per_utt_wer_norm_p50: float | None
     per_utt_wer_norm_p90: float | None
     per_utt_wer_norm_p95: float | None
     per_utt_n_eligible: int
     per_utt_min_ref_words: int
-    # M3 — by-length-bucket aggregates (length-weighted normalized WER + CI).
+                                                                             
     by_length: list[BucketAggregate] = field(default_factory=list)
 
 
 def _process_words(ref: str, hyp: str) -> tuple[float, int, int, int, int, int]:
-    """Return (wer, errors, ref_words, subs, dels, ins). Empty refs degrade to (1.0, …)."""
     if not ref.strip():
         if hyp.strip():
             n = len(hyp.split())
@@ -159,7 +144,6 @@ def score(reference: str, hypothesis: str) -> WerResult:
 
 
 def _bootstrap_wer_norm(per_utt: list[WerResult]) -> tuple[float | None, float | None]:
-    """95% CI on aggregate normalized WER via per-utterance resampling."""
     if len(per_utt) < 2:
         return None, None
     errors = np.array([r.word_errors_normalized for r in per_utt], dtype=np.float64)
@@ -199,7 +183,6 @@ def _bucket_for(audio_s: float) -> str | None:
 def aggregate_by_length(
     per_utt: list[WerResult], audio_durations: list[float],
 ) -> list[BucketAggregate]:
-    """Length-bucketed aggregation. ``audio_durations`` is parallel to ``per_utt``."""
     if not per_utt or len(per_utt) != len(audio_durations):
         return []
     by_label: dict[str, list[WerResult]] = {label: [] for label, _, _ in _LENGTH_BUCKETS}
@@ -234,7 +217,6 @@ def aggregate(
     per_utt: list[WerResult],
     audio_durations: list[float] | None = None,
 ) -> WerAggregate:
-    """Length-weighted aggregation with bootstrap CI on normalized WER."""
     if not per_utt:
         return WerAggregate(
             0.0, 0.0, 0.0, 0.0, 0, 0, None, None, 0,

@@ -1,4 +1,3 @@
-"""NVIDIA Canary-Qwen-2.5B via NeMo (CUDA fp16)."""
 
 import argparse
 import time
@@ -8,8 +7,8 @@ from adapter._base import audio_duration_s, emit_ready, log, serve
 
 
 def _load_model(model_id: str):
-    # Lazy import so --help works without a CUDA install.
-    from nemo.collections.asr.models import EncDecMultiTaskModel  # type: ignore
+                                                         
+    from nemo.collections.asr.models import EncDecMultiTaskModel                
     log(f"loading {model_id} (NeMo, CUDA)")
     model = EncDecMultiTaskModel.from_pretrained(model_id)
     decode_cfg = model.cfg.decoding
@@ -50,7 +49,7 @@ def main() -> None:
     ap.add_argument("--model-id", default="nvidia/canary-qwen-2.5b")
     ap.add_argument("--source-lang", default="en")
     ap.add_argument("--target-lang", default="en")
-    # Decoding-config flags — accepted for fairness wrapper compatibility.
+                                                                          
     ap.add_argument("--beam-size", type=int, default=1)
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--language", default="en")

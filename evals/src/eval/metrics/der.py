@@ -1,10 +1,3 @@
-"""Diarization error rate via pyannote.metrics. Inputs are RTTM file paths.
-
-We compute DER both with and without overlap regions:
-* ``der_with_overlap`` — counts errors inside overlapping speech (the honest number).
-* ``der_no_overlap`` — pyannote's ``skip_overlap=True``; comparable to many published
-  numbers that hide overlap performance.
-"""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,9 +13,8 @@ class DerResult:
     jer: float
     speaker_count_error: int
     duration_s: float
-    # M5 — DER decomposition (with-overlap variant). Each is a fraction of
-    # ``total`` reference speech: ``der_missed + der_false_alarm + der_confusion``
-    # equals ``der_with_overlap`` (within float epsilon).
+                                                                          
+                                                                                  
     der_missed: float
     der_false_alarm: float
     der_confusion: float
@@ -50,9 +42,7 @@ def score(reference_rttm: Path, hypothesis_rttm: Path) -> DerResult:
     der_no_overlap = DiarizationErrorRate(collar=0.25, skip_overlap=True)
     jer_metric = JaccardErrorRate(collar=0.25)
 
-    # ``detailed`` returns the components as float seconds (or fractions, depending
-    # on pyannote version) plus the aggregate DER. We normalize against the
-    # ``total`` field so each component is a fraction of reference speech.
+                                                                                   
     detailed = der_overlap(ref, hyp, detailed=True)
     total = float(detailed.get("total", 0.0)) or 1.0
     missed = float(detailed.get("missed detection", 0.0)) / total

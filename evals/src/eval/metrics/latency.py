@@ -1,4 +1,3 @@
-"""Live-only latency aggregations from per-utterance hypothesis fields."""
 
 from dataclasses import dataclass
 

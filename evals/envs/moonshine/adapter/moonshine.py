@@ -1,4 +1,3 @@
-"""Moonshine ONNX adapter — base or tiny, optional simulated streaming chunks."""
 
 import argparse
 import time
@@ -11,7 +10,7 @@ from moonshine_onnx import MoonshineOnnxModel, load_tokenizer
 from adapter._base import audio_duration_s, emit_ready, log, serve
 
 SAMPLE_RATE = 16000
-# Moonshine is best at <30s; we slice at 10s with 1s overlap for streaming sim.
+                                                                               
 CHUNK_S = 10.0
 OVERLAP_S = 1.0
 
@@ -46,7 +45,7 @@ def _transcribe(model, tokenizer, audio_path: Path, streaming: bool, pace: str) 
             slice_ = audio[i:i + chunk_n]
             t_start = i / SAMPLE_RATE
             t_end = min((i + chunk_n) / SAMPLE_RATE, len(audio) / SAMPLE_RATE)
-            # 1× pacing: a streamed adapter only "has" the audio at t_end seconds in.
+                                                                                     
             if pace == "realtime":
                 drift = (wall_zero + t_end) - time.perf_counter()
                 if drift > 0:
@@ -98,7 +97,7 @@ def main() -> None:
     ap.add_argument("--streaming", action="store_true", help="Slice into 10s chunks (sim live).")
     ap.add_argument("--pace", choices=("realtime", "fast"), default="realtime",
                     help="In streaming mode, pace chunks at audio-timeline rate or as fast as possible.")
-    # Decoding-config flags — accepted for fairness wrapper compatibility.
+                                                                          
     ap.add_argument("--beam-size", type=int, default=1)
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--language", default="en")

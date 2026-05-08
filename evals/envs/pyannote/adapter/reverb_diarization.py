@@ -1,10 +1,3 @@
-"""Reverb Diarization v2 (Rev) — EEND-style diarization. Emits an RTTM file.
-
-License note: the Reverb v2 weights are CC-BY-NC-4.0 — surfaced in MODEL_CARD.md.
-The package import path varies by Rev's release; we try the documented entry first
-and fall back to the older one. If both fail, the adapter emits a clear error so
-the runner records a graceful skip.
-"""
 
 import argparse
 import os
@@ -16,15 +9,14 @@ from adapter._base import log
 def _load_pipeline():
     token = os.environ.get("HF_TOKEN")
     try:
-        from reverb_diarize import ReverbDiarize  # type: ignore
+        from reverb_diarize import ReverbDiarize                
         log("loaded reverb_diarize.ReverbDiarize")
         return ReverbDiarize.from_pretrained(use_auth_token=token)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:                
         log(f"reverb_diarize import path failed ({e}); trying pyannote-pretrained fallback")
 
-    # Fallback: Rev publishes the model on HF as ``Revai/reverb-diarization-v2``
-    # and it loads through pyannote's Pipeline if the user has accepted the gate.
-    from pyannote.audio import Pipeline  # type: ignore
+                                                                                
+    from pyannote.audio import Pipeline                
     return Pipeline.from_pretrained("Revai/reverb-diarization-v2", use_auth_token=token)
 
 
