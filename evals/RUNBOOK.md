@@ -185,7 +185,7 @@ uv run eval run-family live
 uv run eval run-family diarization
 ```
 
-This runs every model in the family. Models that can't run on this host will be marked as failed in `errors.log` — that's fine; the run-family command exits non-zero so you can see what didn't run.
+This runs every model in the family. Models that can't run on this host will be counted in `summary.json`'s `n_failed` — that's fine; the run-family command exits non-zero so you can see what didn't run.
 
 ### 5. Generate the model card
 

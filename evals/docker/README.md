@@ -83,7 +83,7 @@ docker compose run --rm evals run-family live
 docker compose run --rm evals run-family diarization
 ```
 
-Mac-only models (`parakeet_tdt_0_6b_v2_offline`, `parakeet_fluid_audio`, `moonshine_base`, `faster_whisper_large_v3_turbo`) will be marked failed in `errors.log` from `run-family` — that's expected.
+Mac-only models (`parakeet_tdt_0_6b_v2_offline`, `parakeet_fluid_audio`, `moonshine_base`, `faster_whisper_large_v3_turbo`) will be counted in `n_failed` from `run-family` — that's expected.
 
 ## Consolidate + report
 
@@ -106,4 +106,4 @@ Or run `uv run eval report` directly on either host — the report code is platf
 - `docker: Error response from daemon: could not select device driver "" with capabilities: [[gpu]]` — Docker Desktop GPU support not enabled. Settings → Resources → WSL Integration, and ensure the NVIDIA driver is recent.
 - `CUDA out of memory` on Canary-Qwen — close other GPU users; if it persists, the WhisperLive server may still be running. Check with `docker compose ps`.
 - DiariZen `from_pretrained` complains about HF gate — re-check `HF_TOKEN` and that you accepted the model license on huggingface.co.
-- `whisper-live server did not open …` — usually means the upstream server crashed during model load. Check the run's `errors.log` for the underlying stack trace.
+- `whisper-live server did not open …` — usually means the upstream server crashed during model load. Check the runner's stderr for the underlying stack trace.

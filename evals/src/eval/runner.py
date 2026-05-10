@@ -1,5 +1,4 @@
 
-import csv
 import json
 import platform
 import shutil
@@ -257,15 +256,13 @@ def run(
     if limit:
         samples = samples[:limit]
 
-    per_utt_rows: list[dict] = []
     per_utt_wer: list[wer_metric.WerResult] = []
     per_utt_audio_s: list[float] = []
     per_utt_partials: list[list[dict]] = []
     first_partials: list[float | None] = []
     commit_lags: list[float | None] = []
-    cold_loads: list[float] = []                                      
+    cold_loads: list[float] = []
     peak_rss_max = 0.0
-    errors_log: list[str] = []
     total_audio_s = 0.0
     total_wall_s = 0.0
     failed = 0
@@ -295,15 +292,6 @@ def run(
 
             if hyp is None:
                 failed += 1
-                errors_log.append(f"[{sample.id}] {stderr}")
-                per_utt_rows.append({
-                    "id": sample.id, "audio": sample.audio,
-                    "audio_s": audio_s, "wall_s": wall_s,
-                    "peak_rss_mb": peak_mb, "wer": None, "cer": None,
-                    "wer_norm": None, "cer_norm": None, "hypothesis": "",
-                    "reference": ref,
-                    "error": (stderr.splitlines()[0] if stderr else "unknown"),
-                })
                 continue
 
             wer_r = wer_metric.score(ref, hyp.text)
@@ -312,20 +300,10 @@ def run(
             per_utt_partials.append([p.model_dump() for p in hyp.partials])
             first_partials.append(hyp.time_to_first_partial_ms)
             commit_lags.append(hyp.partial_to_final_lag_ms)
-            per_utt_rows.append({
-                "id": sample.id, "audio": sample.audio,
-                "audio_s": audio_s, "wall_s": wall_s,
-                "peak_rss_mb": peak_mb,
-                "wer": wer_r.wer, "cer": wer_r.cer,
-                "wer_norm": wer_r.wer_normalized, "cer_norm": wer_r.cer_normalized,
-                "hypothesis": hyp.text, "reference": ref, "error": "",
-            })
     finally:
         if warm_adapter is not None:
-            warm_peak, warm_stderr = warm_adapter.close()
+            warm_peak, _warm_stderr = warm_adapter.close()
             peak_rss_max = max(peak_rss_max, warm_peak)
-            if warm_stderr:
-                errors_log.append(f"[adapter-stderr]\n{warm_stderr}")
 
                        
     agg = wer_metric.aggregate(per_utt_wer, per_utt_audio_s)
@@ -425,26 +403,5 @@ def run(
 
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     (run_dir / "meta.json").write_text(json.dumps(meta, indent=2))
-    if errors_log:
-        (run_dir / "errors.log").write_text("\n\n".join(errors_log))
-
-                                                                  
-    scored_rows = [r for r in per_utt_rows if r.get("wer_norm") is not None]
-    worst_rows = sorted(scored_rows, key=lambda r: r["wer_norm"], reverse=True)[:10]
-    worst_dump = [
-        {
-            "id": r["id"], "audio": r.get("audio", ""),
-            "hypothesis": r["hypothesis"], "reference": r["reference"],
-            "wer": r["wer_norm"], "audio_s": r["audio_s"],
-        }
-        for r in worst_rows
-    ]
-    (run_dir / "worst.json").write_text(json.dumps(worst_dump, indent=2))
-
-    csv_path = run_dir / "per_utterance.csv"
-    with csv_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=list(per_utt_rows[0].keys()) if per_utt_rows else [])
-        writer.writeheader()
-        writer.writerows(per_utt_rows)
 
     return run_dir

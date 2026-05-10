@@ -109,7 +109,7 @@ See [`DATASETS.md`](./DATASETS.md) for full acquisition + manifest-format detail
 
 Wire contract for adapters:
 
-* On stdout, emit a single line `---HYPOTHESIS-JSON---`, then a single JSON line conforming to `eval.types.Hypothesis`. Anything else on stdout/stderr is chatter and ignored on success / captured into `errors.log` on failure.
+* On stdout, emit a single line `---HYPOTHESIS-JSON---`, then a single JSON line conforming to `eval.types.Hypothesis`. Anything else on stdout/stderr is chatter and ignored.
 * Live adapters fill `partials` (per `eval.types.Partial`) so streaming metrics (stability ratio, real-time lag) light up.
 * Decoding flags (`--beam-size`, `--temperature`, `--language`, `--vad-aggressiveness`, `--pace`) must be accepted via `parse_known_args`; honor what you can, log deviations.
 
