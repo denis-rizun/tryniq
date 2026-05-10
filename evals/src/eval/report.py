@@ -71,8 +71,35 @@ def _fmt_wer_with_ci(s: dict) -> str:
     return base
 
 
+def _fmt_der(s: dict, key: str) -> str:
+    v = s.get(key) if key != "der_with_overlap_or_der" else (s.get("der_with_overlap") or s.get("der"))
+    return _fmt(v)
+
+
+def _fmt_rtf(s: dict) -> str:
+    v = s.get("steady_rtf")
+    if v is None:
+        v = s.get("rtf")
+    if v is None:
+        return "—"
+    return f"{v:.2f}"
+
+
+def _external_footnote(models: list, results: dict[str, dict[str, dict]]) -> str:
+    notes: list[str] = []
+    for m in models:
+        for ds, s in results.get(m.name, {}).items():
+            if s.get("external_source"):
+                src = s.get("source_url") or s.get("external_source") or "external"
+                ds_name = s.get("note") or s.get("dataset")
+                notes.append(f"`{m.name}` × `{ds}`: {src}" + (f" — {ds_name}" if s.get("note") else ""))
+    if not notes:
+        return ""
+    return "\n\n_Externally sourced (no local run / local run unrepresentative). Provenance:_\n" + "\n".join(f"- {n}" for n in notes)
+
+
 def _table_for_family(family: str, results: dict[str, dict[str, dict]]) -> str:
-    models = comparison_models_for_family(family)                          
+    models = comparison_models_for_family(family)
     if not models:
         return "_no models registered_"
 
@@ -102,8 +129,8 @@ def _table_for_family(family: str, results: dict[str, dict[str, dict]]) -> str:
                         if miss is not None else "—"
                     )
                     row += [
-                        _fmt(s.get("der_with_overlap") or s.get("der")),
-                        _fmt(s.get("der_no_overlap")),
+                        _fmt_der(s, "der_with_overlap_or_der"),
+                        _fmt_der(s, "der_no_overlap"),
                         decomp,
                     ]
             rows.append("| " + " | ".join(row) + " |")
@@ -113,7 +140,7 @@ def _table_for_family(family: str, results: dict[str, dict[str, dict]]) -> str:
             "(fractions of reference speech, sum ≈ DER+OV). Confusion is the worst-failure mode for "
             "meeting transcripts — mis-attribution survives into the graph. Peak RSS deliberately "
             "omitted from cross-runtime tables — MLX/CoreML wired memory is invisible to ``psutil`` "
-            "so numbers aren't comparable. Per-meeting RSS lives in ``results/<run_id>/per_meeting.json``._"
+            "so numbers aren't comparable._"
         )
 
                                                          
@@ -146,14 +173,9 @@ def _table_for_family(family: str, results: dict[str, dict[str, dict]]) -> str:
                     f"{_fmt(p90)} / {_fmt(p95)}"
                     if p90 is not None else "—"
                 )
-                                                                                  
-                                                                     
-                rtf_val = s.get("steady_rtf")
-                if rtf_val is None:
-                    rtf_val = s.get("rtf", 0.0)
                 load_s = s.get("cold_load_s")
                 load_cell = f"{load_s:.1f}" if load_s is not None else "—"
-                row += [_fmt_wer_with_ci(s), sdi, tail, f"{rtf_val:.2f}", load_cell]
+                row += [_fmt_wer_with_ci(s), sdi, tail, _fmt_rtf(s), load_cell]
         if family == "live":
             for d in datasets:
                 s = results.get(m.name, {}).get(d)
