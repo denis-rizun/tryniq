@@ -4,9 +4,9 @@
 
 | Field                 | Value                                              |
 |-----------------------|----------------------------------------------------|
-| **Document version**  | 1.2                                                |
-| **Status**            | In flight — Phases 1–5 landed; Phase 6 polish      |
-| **Last updated**      | 2026-05-08                                         |
+| **Document version**  | 1.3                                                |
+| **Status**            | In flight — Phases 1–6 landed; Phase 7 deferred    |
+| **Last updated**      | 2026-05-10                                         |
 | **Target demo date**  | 2026-05-11, 16:00                                  |
 | **Project codename**  | Tryniq                                             |
 | **Document owner**    | Engineering team                                   |
@@ -86,7 +86,7 @@ Status legend: ✓ done · ◐ in flight · → deferred to post-demo.
 - **G2 ✓** — Produce a live transcript with sub-3-second latency from speech to text appearing in the UI, with correct speaker attribution.
 - **G3 ✓** — Refine the live transcript into a high-accuracy final transcript after the meeting ends, using a stronger ASR model on the full per-speaker audio.
 - **G4 ✓** — Build and visualize a meeting knowledge graph in real time, containing topics, decisions, action items, open questions, and entities, with grounding to source utterances.
-- **G5 →** — Persist speaker identity across meetings via voice embeddings (deferred; display-name based identity works today).
+- **G5 →** — Persist speaker identity across meetings via voice embeddings (deferred to Phase 7; display-name based identity works today).
 - **G6 ✓** — Link topics / meetings across recordings via post-meeting metadata reconciliation (`extract_meeting_metadata`).
 - **G7 ✓** — Allow post-meeting question answering ("Chat with the meeting") via retrieval over the transcript, with timestamped citations.
 - **G8 ✓** — Export a structured Markdown summary of any meeting, suitable for pasting into a wiki or ticket.
@@ -473,11 +473,11 @@ This section enumerates every feature in the MVP, with detailed behavior, accept
 **Description.** The entire stack runs on a developer's laptop or a single server via Docker Compose.
 
 **Behavior.**
-- A single `docker-compose.yml` defines all services with `cpu` and `gpu` profiles.
-- A `make up` command brings up the stack; `make down` tears it down.
-- Default LLM is configurable: Anthropic Claude Haiku via API or local Qwen 2.5 14B via Ollama or vLLM.
-- All other models (ASR, VAD, speaker embedding) run locally.
-- A `.env.example` documents all configuration.
+- A single `backend/compose.yml` defines all services (Postgres + pgvector, MinIO, Redis, redis-insight, api, worker, migration, ClickHouse, Langfuse web + worker + postgres-init). The Swift streamer runs natively on a Mac and is not containerized.
+- A `make bc` (`docker compose up --build -d`) brings up the backend stack; `make fr` runs the frontend dev server; `make ext-build` / `make ext-dev` build the extension.
+- Default LLM is OpenAI `gpt-5.5` (configurable per-feature via `GRAPH_LLM_MODEL` / `METADATA_LLM_MODEL` / `CHAT_LLM_MODEL`); the OpenAI client wrapper accepts any OpenAI-compatible base URL, so a local Qwen 2.5 14B via vLLM or Ollama works as a drop-in.
+- All other models run locally: faster-whisper in the worker, Parakeet-TDT v2 in the Swift streamer, Silero VAD in the browser worklet, DiariZen on the upload path.
+- A `backend/.env.example` documents every setting, grouped by section.
 
 **Acceptance criteria.**
 - A new developer can clone the repo and run `make up` successfully on macOS, Linux, and WSL2.
@@ -611,7 +611,13 @@ Backend code is organised by *feature* under `backend/app/<feature>/` (`meeting`
 
 ### 7.4 Deployment topology (MVP)
 
-Three infra containers (Postgres, MinIO, Redis) plus two app containers (`api`, `worker`) built from the same image, all in `backend/compose.yml`. The Swift streamer is **not** containerized — it runs natively on a Mac (CoreML), pointed at the api via env var. Scale workers horizontally by running additional `worker` containers against the same Redis; scale live ASR by starting additional streamer instances (each registers on `/asr/sessions` and the api round-robins by load). No Kubernetes, no service mesh, no production infrastructure. Production hardening is post-MVP.
+Containers in `backend/compose.yml`:
+
+- Three core infra: **Postgres + pgvector** (image `pgvector/pgvector:pg18`), **MinIO**, **Redis** (with **redis-insight** as a dev-only console).
+- Two app containers built from the same `tryniq-backend:dev` image: **api** (`uvicorn app.main:app`) and **worker** (`taskiq worker app.tasks:broker`); a one-shot **migration** container (`alembic upgrade head`) shares the image and `entrypoint.sh`.
+- Langfuse v3 stack: **clickhouse** (`clickhouse/clickhouse-server:24`) for trace/event storage, **langfuse-postgres-init** (one-shot — creates the `langfuse` database inside the existing Postgres), **langfuse-web** (`langfuse/langfuse:3` — UI + ingest API on `:3001`), and **langfuse-worker** (`langfuse/langfuse-worker:3` — background event processor). The Langfuse stack also reuses MinIO as its S3-compatible event/media bucket.
+
+The Swift streamer is **not** containerized — it runs natively on a Mac (CoreML), pointed at the api via env var. Scale workers horizontally by running additional `worker` containers against the same Redis; scale live ASR by starting additional streamer instances (each registers on `/asr/sessions` and the api round-robins by load). No Kubernetes, no service mesh, no production infrastructure. Production hardening is post-MVP.
 
 ---
 
@@ -665,24 +671,24 @@ CREATE TABLE utterances (
     text TEXT NOT NULL,
     confidence FLOAT,
     is_final BOOLEAN DEFAULT FALSE,
-    model TEXT,  -- 'moonshine' or 'whisper-large-v3'
+    model TEXT,  -- 'fluid_audio-parakeet-tdt-v2' (live) or 'faster_whisper-large-v3-turbo' (final)
     edited_by_user BOOLEAN DEFAULT FALSE,
     word_timings JSONB  -- [[word, start, end, conf], ...]
 );
 CREATE INDEX idx_utterances_meeting ON utterances(meeting_id, t_start);
 
--- Utterance embeddings for RAG
+-- Utterance embeddings for RAG (text-embedding-3-small, 1536-dim)
 CREATE TABLE utterance_embeddings (
     utterance_id UUID PRIMARY KEY REFERENCES utterances(id),
-    embedding VECTOR(384)  -- e.g. all-MiniLM-L6-v2
+    embedding VECTOR(1536)
 );
 
--- Topic embeddings for cross-meeting linking
-CREATE TABLE topic_embeddings (
-    topic_id UUID PRIMARY KEY,
-    meeting_id UUID REFERENCES meetings(id),
-    embedding VECTOR(384)
-);
+-- Chat sessions / messages (Phase 6) — message embeddings co-located on the
+-- chat_messages row; see app/chat/models.py.
+-- Topic-level cross-meeting linking is now handled inside graph_nodes
+-- (graph_nodes.embedding VECTOR(1536)) rather than a separate topic_embeddings
+-- table; the `meetings.summary_embedding` column powers the
+-- "related past meetings" projection in extract_meeting_metadata.
 
 -- Knowledge graph: nodes
 -- type ∈ {Meeting, Person, Topic, Decision, ActionItem, OpenQuestion, Entity, Utterance}
@@ -894,13 +900,15 @@ Response is parsed, validated against a Pydantic schema, and applied transaction
 
 | Role | Model | Rationale |
 |---|---|---|
-| Live ASR | Parakeet-TDT v2 via `fluid_audio` (Swift) | Runs in the standalone `streamer/` process on Apple Silicon (CoreML). Per-stream low latency, multi-stream parallelism, no Python in the live path. Auth to api via `ASR_LIVE_AUTH_TOKEN`. |
-| Final ASR | faster-whisper large-v3-turbo | Best WER, mature ecosystem, CTranslate2-optimized; runs in the TaskIQ worker. |
-| VAD | Silero VAD (ONNX) | 2 MB, browser-runnable, accurate |
-| Speaker embedding | SpeechBrain ECAPA-TDNN | Standard, robust, fast inference |
-| Graph LLM (default) | Anthropic Claude Haiku 4.5 | Strong structured output, low latency, cheap |
-| Graph LLM (self-host) | Qwen 2.5 14B Instruct | Best open structured-output model in size class |
-| Text embedding | all-MiniLM-L6-v2 | Small, fast, good enough for RAG |
+| Live ASR | Parakeet-TDT v2 via `fluid_audio` (Swift) | Runs in the standalone `streamer/` process on Apple Silicon (CoreML). Per-stream low latency, multi-stream parallelism, no Python in the live path. Auth to api via `ASR_LIVE_AUTH_TOKEN`. Configured via `ASR_LIVE_PROVIDER` / `ASR_LIVE_MODEL`. |
+| Final ASR | faster-whisper large-v3-turbo | Best WER, mature ecosystem, CTranslate2-optimized; runs in the TaskIQ worker. Default device `cpu` / compute `int8`; promote to `cuda` / `float16` on GPU hosts. |
+| VAD | Silero VAD (ONNX) | 2 MB, browser-runnable inside an `AudioWorkletProcessor` via `onnxruntime-web` (WASM, single thread). |
+| Diarization (upload path only) | DiariZen (BUT-FIT) `wavlm-large-s80-md-v2` | Used in `process_upload` to cluster a mixed uploaded recording into speaker turns. Ships its own forked `pyannote-audio`; if not installed, the uploader falls back to a single-cluster pass-through so the rest of the pipeline still runs. |
+| Speaker embedding (Phase 7) | SpeechBrain ECAPA-TDNN | 192-dim. Schema reserved (`voice_embeddings`); not yet populated. |
+| Graph / metadata / chat LLM (default) | OpenAI `gpt-5.5` | Strong structured output via OpenAI structured outputs (`response_format=json_schema`); low latency. Same default for `GRAPH_LLM_MODEL`, `METADATA_LLM_MODEL`, `CHAT_LLM_MODEL` — all configurable via env. |
+| Graph LLM (self-host alternative) | Qwen 2.5 14B Instruct (or any OpenAI-compatible endpoint) | Best open structured-output model in size class; the `core/client.py` wrapper accepts any OpenAI-compatible base URL. |
+| Text embedding | OpenAI `text-embedding-3-small` (1536-dim) | Used for both RAG (`utterance_embeddings`, `chat_messages.embedding`) and graph node dedup (`graph_nodes.embedding`, cosine ≥ `GRAPH_DEDUP_COSINE_THRESHOLD = 0.85`). |
+| LLM observability / prompt mgmt | Self-hosted Langfuse v3 (web + worker + ClickHouse) | Wired in via `langfuse>=4.5` SDK; toggle with `AI_LANGFUSE_ENABLED`. |
 
 ### 10.2 Comparison plan
 
@@ -908,9 +916,10 @@ For the model card deliverable, three ASR options are benchmarked:
 
 | Model | Size | Latency target | WER target | Hardware |
 |---|---|---|---|---|
-| Moonshine base (ONNX, streaming) | 60M | <200ms per 1s | <12% | CPU/CoreML |
-| Parakeet-TDT v2 via `fluid_audio` | 600M | <0.1 RTF | <8% | Apple Silicon (CoreML) — selected for live |
-| faster-whisper large-v3-turbo | 1.5B | <0.3 RTF | <5% | GPU preferred — selected for final |
+| Moonshine base (ONNX, streaming) | 60M | <200ms per 1s | <12% | CPU/CoreML — evaluated, not selected |
+| Parakeet-TDT v2 via `fluid_audio` | 600M | <0.1 RTF | <8% | Apple Silicon (CoreML) — **selected for live** |
+| faster-whisper large-v3-turbo | 1.5B | <0.3 RTF | <5% | GPU preferred (also runs on CPU `int8`) — **selected for final** |
+| DiariZen `wavlm-large-s80-md-v2` (BUT-FIT) | 0.6B | offline | n/a (turn-level) | CPU/GPU — selected for the **uploaded-recording fallback** path only |
 
 Test set: three recordings (clean, noisy, multi-speaker), each ~5 minutes of English, with hand-curated reference transcripts.
 
@@ -1048,10 +1057,10 @@ Seven daily phases, each ending with a working end-to-end milestone in its own s
 - `embed_utterances` (chat / RAG embeddings), `extract_meeting_metadata` (final-pass title / summary / related-meetings reconciliation in `app/metadata/`), Markdown export (`app/export/`), audio asset endpoints, people directory, upload-recording fallback path (`app/upload/` with ffmpeg + diarization clients).
 - **Done when:** completed meetings produce a refined transcript, a clean graph, related-meeting links, exportable Markdown, and chat-with-the-meeting answers with citations. ✓
 
-### Phase 6 — Polish (in flight, demo week)
-- Chat session UX (dedup pending messages, inline citations to timestamps), command palette hookup, export modal, meeting settings (audio downloads, rename), people page wired to backend, langfuse v3 tracing.
-- Remaining: extension popup polish, empty states, README final pass, demo-flow rehearsal fixes.
-- **Done when:** demo flow runs end-to-end without manual intervention.
+### Phase 6 — Polish (done, demo week)
+- Chat session UX (dedup pending messages, inline citations to timestamps), command palette hookup, export modal, meeting settings (audio downloads, rename), people page wired to backend, Langfuse v3 tracing (web + worker + ClickHouse) wired through the OpenAI client wrapper. ✓
+- Extension popup polish, empty states, README + PRD final pass, demo-flow rehearsal fixes.
+- **Done when:** demo flow runs end-to-end without manual intervention. ✓
 
 ### Phase 7 — Post-demo (deferred)
 - `compute_speaker_embeddings`, `match_speaker`, voice-print cross-meeting recognition.
@@ -1112,7 +1121,7 @@ These are decisions deferred until implementation reveals more:
 
 ### 17.2 Repository structure
 
-Three top-level packages: `backend/` (Python), `streamer/` (Swift, live ASR), `extension/` (Chrome MV3 TS), `frontend/` (Next.js TS). The Python `api` and `worker` share one image and one codebase under `backend/app/` (entrypoint commands `api` / `worker` / `migrate`).
+Four top-level packages: `backend/` (Python 3.13), `streamer/` (Swift 6, live ASR), `extension/` (Chrome MV3 TS), `frontend/` (Next.js 16 / React 19 TS). The Python `api` and `worker` share one image and one codebase under `backend/app/` (entrypoint commands `api` / `worker` / `migrate`). Backend is structured as 12 feature modules — `meeting`, `ingest`, `transcript`, `participant`, `asr`, `graph`, `metadata`, `chat`, `export`, `audio`, `search`, `upload` — plus shared `core/`, each containing the standard `router.py` / `service.py` / `schemas.py` / `models.py` / `tasks.py` / `clients/` / `services/` set as needed (see `backend/CONSTITUTION.md`).
 
 ```
 tryniq/
@@ -1207,7 +1216,29 @@ tryniq/
 │       ├── TranscriptTiming.swift
 │       ├── AsrConfigBuilder.swift
 │       └── EnvLoader.swift
-├── extension/                    # Chrome MV3 (TypeScript)
+├── extension/                    # Chrome MV3 (TypeScript, Vite 8)
+│   ├── manifest.json             # MV3, MAIN-world injected.js + ISOLATED-world content.js
+│   ├── package.json              # onnxruntime-web for Silero VAD; React 19 popup
+│   ├── scripts/build.mjs         # vite build orchestration
+│   ├── vendor/silero_vad.onnx
+│   └── src/
+│       ├── injected.ts           # MAIN world: RTCPeerConnection patch + track attach
+│       ├── webrtc-patch.ts       # monkey-patch addTrack / track event
+│       ├── track-attacher.ts     # AudioContext + worklet wiring
+│       ├── audio-worklet.ts      # 48k → 16k int16 resampler + frame chunker
+│       ├── voice-activity-detector.ts  # Silero VAD via onnxruntime-web (WASM)
+│       ├── content.ts            # ISOLATED world: orchestration + control loop
+│       ├── dom-observer.ts       # Meet DOM → display name + active-speaker
+│       ├── speaker-naming.ts     # placeholder / fallback labeling
+│       ├── stream-manager.ts     # per-track StreamSlot + VAD event handling
+│       ├── websocket-client.ts   # /meetings/{m}/streams/{s} WS with reconnect
+│       ├── meeting-api.ts        # POST /meetings, end-meeting REST calls
+│       ├── tab-detection.ts      # meet | fake-meet (localhost) | other
+│       ├── settings.ts           # chrome.storage settings persistence
+│       ├── state-publisher.ts    # content → background → popup state push
+│       ├── background.ts         # SW relay between popup and active tab
+│       ├── popup/                # React 19 popup (status, start/stop, mute)
+│       └── constants.ts          # selectors, VAD params, gateway URLs
 └── frontend/                     # Next.js App Router (TypeScript)
     └── src/
         ├── app/
@@ -1250,8 +1281,8 @@ tryniq/
 2. "The extension intercepts WebRTC tracks before mixing — clean audio per speaker, real names from the DOM, active speaker for free."
 3. "We modeled meetings as a graph, not a transcript. Decisions, action items, questions, topics — all typed nodes with grounded sources."
 4. "Cross-meeting memory: ECAPA voice embeddings recognize people. Topic embeddings link discussions across time."
-5. "Adaptive transcription: Moonshine for live latency, Whisper large-v3 refines after the meeting. UI shows the diff."
-6. "Fully self-hostable: every model can run locally. Single `make up`."
+5. "Adaptive transcription: Parakeet-TDT v2 in a Swift streamer (Apple Silicon, CoreML) for live latency, faster-whisper large-v3-turbo refines after the meeting. UI shows the diff."
+6. "Fully self-hostable: every model can run locally; the LLM endpoint is OpenAI-compatible so Qwen 2.5 / Ollama / vLLM are drop-in. Single `make bc`."
 7. "Bot deployment via headless Chrome is the next step — same extension, no architectural changes."
 
 ### 17.5 Anticipated Q&A
@@ -1269,7 +1300,7 @@ A: Self-hosted MinIO inside Docker Compose. LLM is configurable to a local model
 A: We measured precision/recall above 70% on scripted test meetings for decisions and action items. Every extracted node is grounded — users can verify.
 
 **Q: Why not pyannote for diarization as a backup?**
-A: We use it for the upload-recording fallback path. It's the right tool for that job. For live capture from a Meet tab, we don't need it because we never have a mixed stream.
+A: We do diarize, but only on the uploaded-recording fallback path — using DiariZen (BUT-FIT, `wavlm-large-s80-md-v2`), which ships its own forked `pyannote-audio` and outperforms upstream pyannote on our test recordings. The fallback gracefully degrades to a single-cluster pass-through if DiariZen isn't installed. For live capture from a Meet tab we don't need it because we never have a mixed stream.
 
 **Q: What's missing for production?**
 A: Multi-tenancy, RBAC, SSO, observability, HA. The MVP is a working internal prototype, not a product. Roadmap is documented.
