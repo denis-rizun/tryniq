@@ -200,6 +200,18 @@ def _build_hypothesis(audio_path: Path, cap: _Capture) -> dict:
     ]
     text = " ".join(s["text"] for s in segments if s["text"])
 
+    last_final_offset = max(
+        (float(f.get("_wall_offset_ms", 0.0)) for f in cap.finals),
+        default=-1.0,
+    )
+    tail_partial = ""
+    for p in reversed(cap.partials):
+        if float(p.get("_wall_offset_ms", 0.0)) > last_final_offset:
+            tail_partial = (p.get("text") or "").strip()
+            break
+    if tail_partial:
+        text = (text + " " + tail_partial).strip() if text else tail_partial
+
                                                                             
     partials_trace: list[dict] = []
     last_audio_t_end = 0.0

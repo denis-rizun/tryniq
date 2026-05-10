@@ -93,7 +93,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--audio", type=Path)
     ap.add_argument("--warm-stdin", action="store_true")
-    ap.add_argument("--model-id", default="UsefulSensors/moonshine-base")
+    ap.add_argument("--model-id", default="UsefulSensors/moonshine/base")
     ap.add_argument("--streaming", action="store_true", help="Slice into 10s chunks (sim live).")
     ap.add_argument("--pace", choices=("realtime", "fast"), default="realtime",
                     help="In streaming mode, pace chunks at audio-timeline rate or as fast as possible.")

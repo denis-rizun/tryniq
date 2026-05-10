@@ -14,11 +14,18 @@ def main() -> None:
     args = ap.parse_args()
 
                                                                                
-    from diarizen.pipelines import SpeakerDiarization                
+    import torch
+    _orig_load = torch.load
+    def _load_unsafe(*a, **kw):
+        kw["weights_only"] = False
+        return _orig_load(*a, **kw)
+    torch.load = _load_unsafe
+
+    from diarizen.pipelines.inference import DiariZenPipeline
 
     token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
     log(f"loading {args.model_id} (HF_TOKEN={'set' if token else 'unset'})")
-    pipeline = SpeakerDiarization.from_pretrained(args.model_id, token=token)
+    pipeline = DiariZenPipeline.from_pretrained(args.model_id)
 
     log(f"running diarization on {args.audio}")
     diarization = pipeline(str(args.audio))

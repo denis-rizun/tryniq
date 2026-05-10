@@ -3,9 +3,22 @@ import argparse
 import os
 from pathlib import Path
 
+import torch
 from pyannote.audio import Pipeline
 
 from adapter._base import log
+
+
+def _select_device() -> torch.device:
+    forced = os.environ.get("PYANNOTE_DEVICE")
+    if forced:
+        return torch.device(forced)
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available() and torch.backends.mps.is_built():
+        os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+        return torch.device("mps")
+    return torch.device("cpu")
 
 
 def main() -> None:
@@ -24,6 +37,10 @@ def main() -> None:
             "and export HF_TOKEN=hf_xxx before running."
         )
     pipeline = Pipeline.from_pretrained(args.model_id, token=token)
+
+    device = _select_device()
+    log(f"running on device={device}")
+    pipeline.to(device)
 
     diarization = pipeline(str(args.audio))
     annotation = getattr(diarization, "speaker_diarization", diarization)

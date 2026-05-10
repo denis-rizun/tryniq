@@ -30,12 +30,17 @@ def parse_stm(path: Path) -> str:
 
 
 def read_reference(text_field: str) -> str:
-    p = Path(text_field)
-    if p.exists() and p.is_file():
-        if p.suffix == ".stm":
-            return parse_stm(p)
-        if p.suffix == ".txt":
-            return p.read_text(encoding="utf-8").strip()
+    if len(text_field) > 255 or "\n" in text_field:
+        return text_field
+    try:
+        p = Path(text_field)
+        if p.exists() and p.is_file():
+            if p.suffix == ".stm":
+                return parse_stm(p)
+            if p.suffix == ".txt":
+                return p.read_text(encoding="utf-8").strip()
+    except OSError:
+        pass
     return text_field
 
 

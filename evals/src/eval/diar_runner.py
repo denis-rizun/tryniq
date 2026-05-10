@@ -79,6 +79,8 @@ def run(model: Model, dataset: Dataset, *, limit: int | None = None, timeout_s: 
     false_alarm_total = 0.0
     confusion_total = 0.0
     duration_total = 0.0
+    wall_total = 0.0
+    speaker_count_errors: list[int] = []
     peak_rss_max = 0.0
     failed = 0
     errors_log: list[str] = []
@@ -141,6 +143,8 @@ def run(model: Model, dataset: Dataset, *, limit: int | None = None, timeout_s: 
         confusion_total += d.der_confusion * d.duration_s
         jer_total += d.jer * d.duration_s
         duration_total += d.duration_s
+        wall_total += wall
+        speaker_count_errors.append(d.speaker_count_error)
 
     summary = {
         "run_id": run_id,
@@ -158,6 +162,16 @@ def run(model: Model, dataset: Dataset, *, limit: int | None = None, timeout_s: 
         "jer": (jer_total / duration_total) if duration_total > 0 else None,
         "peak_rss_mb": peak_rss_max,
         "total_duration_s": duration_total,
+        "wall_seconds_total": wall_total,
+        "rtf": (wall_total / duration_total) if duration_total > 0 else None,
+        "xrt": (duration_total / wall_total) if wall_total > 0 else None,
+        "speaker_count_error_mean": (
+            sum(speaker_count_errors) / len(speaker_count_errors)
+            if speaker_count_errors else None
+        ),
+        "speaker_count_error_max": (
+            max(speaker_count_errors) if speaker_count_errors else None
+        ),
     }
     meta = {
         "run_id": run_id, "git_sha": _git_sha(),

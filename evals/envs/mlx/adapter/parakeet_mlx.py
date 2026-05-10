@@ -9,7 +9,9 @@ from adapter._base import audio_duration_s, emit_ready, log, serve
 
 
 def _transcribe(model, audio: Path) -> dict:
-    result = model.transcribe(str(audio))
+    dur = audio_duration_s(audio)
+    kwargs = {"chunk_duration": 120.0, "overlap_duration": 15.0} if dur > 60 else {}
+    result = model.transcribe(str(audio), **kwargs)
     segments = []
     if hasattr(result, "sentences") and result.sentences:
         for s in result.sentences:
@@ -24,7 +26,7 @@ def _transcribe(model, audio: Path) -> dict:
     return {
         "text": result.text.strip(),
         "segments": segments,
-        "audio_duration_s": audio_duration_s(audio),
+        "audio_duration_s": dur,
     }
 
 
