@@ -141,7 +141,7 @@ models/
 tmp/
 temp/
 .tmp/
-.claude/
+
 # Eval datasets (large audio + restrictive licenses; never commit)
 datasets/
 evals/results/
