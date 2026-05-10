@@ -144,6 +144,7 @@ MODELS: list[Model] = [
         env="pyannote",
         adapter_module="adapter.reverb_diarization",
         description="Modern challenger. Reverb Diarization v2 (Rev). EEND-style.",
+        in_comparison=False,
         license="CC-BY-NC-4.0",
         release_date="2024-09-01",
     ),
