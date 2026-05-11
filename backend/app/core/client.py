@@ -39,7 +39,7 @@ class AIClient:
     async def complete_structured[T: BaseModel](self, request: StructuredRequest) -> T:
         response = await self.openai.chat.completions.create(
             model=request.model,
-            max_tokens=request.max_tokens,
+            max_completion_tokens=request.max_tokens,
             messages=[
                 {"role": "system", "content": request.system},
                 {"role": "user", "content": request.user},
@@ -68,7 +68,7 @@ class AIClient:
         stream = await self.openai.chat.completions.create(
             model=request.model,
             messages=request.messages,
-            max_tokens=request.max_tokens,
+            max_completion_tokens=request.max_tokens,
             stream=True,
             **(request.langfuse_kwargs if self.langfuse_enabled else {}),
         )
