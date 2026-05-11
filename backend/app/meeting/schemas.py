@@ -24,6 +24,10 @@ class MeetingResponse(BaseSchema):
     ended_at: datetime | None
     summary: str | None = None
     metadata_generated_at: datetime | None = None
+    participants_count: int = 0
+    decisions_count: int = 0
+    open_questions_count: int = 0
+    topics_count: int = 0
 
 
 class MeetingUpdateRequest(UpdateSchema):

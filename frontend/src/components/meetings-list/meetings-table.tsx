@@ -43,14 +43,26 @@ export const MeetingsTable = ({ meetings, people, onOpen, onExport }: MeetingsTa
             {m.duration || m.durationLive || '—'}
           </td>
           <td>
-            <AvatarStack people={m.participants.map((pid) => people[pid])} max={4} />
+            {m.participants.length > 0 ? (
+              <AvatarStack people={m.participants.map((pid) => people[pid])} max={4} />
+            ) : (
+              <span className="mono" style={{ fontSize: 12 }}>
+                {m.participantsCount}
+              </span>
+            )}
           </td>
           <td>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {m.topPills.map((t) => (
-                <Pill key={t}>{t}</Pill>
-              ))}
-            </div>
+            {m.topPills.length > 0 ? (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {m.topPills.map((t) => (
+                  <Pill key={t}>{t}</Pill>
+                ))}
+              </div>
+            ) : (
+              <span className="mono" style={{ fontSize: 12 }}>
+                {m.topicsCount}
+              </span>
+            )}
           </td>
           <td className="mono" style={{ fontSize: 12 }}>
             {m.decCount}

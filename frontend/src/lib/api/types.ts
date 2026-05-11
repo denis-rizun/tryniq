@@ -19,6 +19,10 @@ export interface MeetingResponse {
   ended_at: string | null;
   summary: string | null;
   metadata_generated_at: string | null;
+  participants_count: number;
+  decisions_count: number;
+  open_questions_count: number;
+  topics_count: number;
 }
 
 export interface ParticipantResponse {

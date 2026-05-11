@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from secrets import token_urlsafe
 from uuid import UUID
@@ -9,6 +10,8 @@ from sqlalchemy.orm import selectinload
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.graph.constants import NodeType
+from app.graph.models import GraphNode
 from app.meeting.client import redis_client
 from app.meeting.constants import MEET_CODE_RE, LifecycleEvent, MeetingStatus
 from app.meeting.exceptions import InvalidMeetUrlError, MeetingNotFoundError
@@ -45,10 +48,43 @@ class MeetingService:
     async def list(self) -> list[Meeting]:
         query = select(Meeting).options(selectinload(Meeting.room)).order_by(col(Meeting.started_at).desc())
         meetings = (await self.session.exec(query)).all()
+        if not meetings:
+            return list(meetings)
+
+        meeting_ids = [m.id for m in meetings]
+        participants_by_meeting = await self._count_participants(meeting_ids)
+        nodes_by_meeting = await self._count_nodes_by_type(meeting_ids)
+
         for meeting in meetings:
             meeting.meet_code = meeting.room.meet_code
             meeting.meet_url = self.build_meet_url(meeting.room.meet_code)
+            meeting.participants_count = participants_by_meeting.get(meeting.id, 0)
+            type_counts = nodes_by_meeting.get(meeting.id, {})
+            meeting.decisions_count = type_counts.get(NodeType.DECISION, 0)
+            meeting.open_questions_count = type_counts.get(NodeType.OPEN_QUESTION, 0)
+            meeting.topics_count = type_counts.get(NodeType.TOPIC, 0)
         return meetings
+
+    async def _count_participants(self, meeting_ids: Sequence[UUID]) -> dict[UUID, int]:
+        query = (
+            select(Participant.meeting_id, func.count(Participant.id))
+            .where(col(Participant.meeting_id).in_(meeting_ids))
+            .group_by(Participant.meeting_id)
+        )
+        rows = (await self.session.exec(query)).all()
+        return {row[0]: row[1] for row in rows}
+
+    async def _count_nodes_by_type(self, meeting_ids: Sequence[UUID]) -> dict[UUID, dict[NodeType, int]]:
+        query = (
+            select(GraphNode.meeting_id, GraphNode.type, func.count(GraphNode.id))
+            .where(col(GraphNode.meeting_id).in_(meeting_ids))
+            .group_by(GraphNode.meeting_id, GraphNode.type)
+        )
+        rows = (await self.session.exec(query)).all()
+        out: dict[UUID, dict[NodeType, int]] = {}
+        for meeting_id, node_type, count in rows:
+            out.setdefault(meeting_id, {})[node_type] = count
+        return out
 
     async def update(self, meeting: Meeting, data: MeetingUpdateRequest) -> Meeting:
         requested_final = data.status == MeetingStatus.FINAL
