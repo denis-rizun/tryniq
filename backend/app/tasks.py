@@ -8,4 +8,5 @@ broker = ListQueueBroker(url=config.redis.URL).with_result_backend(backend)
 import app.asr.tasks  # noqa: E402, F401
 import app.chat.tasks  # noqa: E402, F401
 import app.graph.tasks  # noqa: E402, F401
+import app.metadata.tasks  # noqa: E402, F401
 import app.upload.tasks  # noqa: E402, F401

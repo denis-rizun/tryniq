@@ -1,10 +1,13 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.core.base_schema import BaseSchema
 from app.graph.constants import NodeStatus
+
+SUMMARY_MIN_WORDS = 5
+SUMMARY_MAX_WORDS = 25
 
 
 class ExtractedTopic(BaseSchema):
@@ -46,6 +49,16 @@ class ExtractedMetadata(BaseSchema):
     decisions: list[ExtractedDecision] = Field(default_factory=list)
     action_items: list[ExtractedActionItem] = Field(default_factory=list)
     open_questions: list[ExtractedOpenQuestion] = Field(default_factory=list)
+
+    @field_validator("summary")
+    @classmethod
+    def _check_summary_word_count(cls, value: str) -> str:
+        words = value.split()
+        if not (SUMMARY_MIN_WORDS <= len(words) <= SUMMARY_MAX_WORDS):
+            raise ValueError(
+                f"summary must be {SUMMARY_MIN_WORDS}-{SUMMARY_MAX_WORDS} words, got {len(words)}"
+            )
+        return value
 
 
 class DecisionProjection(BaseSchema):

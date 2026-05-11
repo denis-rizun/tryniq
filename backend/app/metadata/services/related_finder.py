@@ -54,7 +54,7 @@ class RelatedMeetingsFinder:
               ON other.type = this.type
               AND other.meeting_id <> this.meeting_id
               AND (this.embedding <=> other.embedding) <= :topic_distance
-            WHERE this.meeting_id = :meeting_id AND this.type = 'TOPIC'
+            WHERE this.meeting_id = CAST(:meeting_id AS uuid) AND this.type = 'TOPIC'
             GROUP BY other.meeting_id
             HAVING COUNT(DISTINCT this.id) >= :min_shared
             ORDER BY shared DESC
