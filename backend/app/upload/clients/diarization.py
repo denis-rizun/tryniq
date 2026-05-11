@@ -25,6 +25,7 @@ class DiarizationClient:
 
     def _run(self, wav_path: str) -> list[DiarSegment]:
         pipeline = self._ensure_pipeline()
+        logger.info("running diarization", path=wav_path)
         annotation = pipeline(wav_path)
 
         out: list[DiarSegment] = []

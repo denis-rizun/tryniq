@@ -11,3 +11,6 @@ class UploadSettings(BaseSettings):
     NORMALIZED_SAMPLE_RATE: int = 16000
     NORMALIZED_CHANNELS: int = 1
     DIARIZEN_MODEL: str = "BUT-FIT/diarizen-wavlm-large-s80-md-v2"
+    DIARIZEN_NUM_SPEAKERS: int | None = None
+    DIARIZEN_MIN_SPEAKERS: int | None = None
+    DIARIZEN_MAX_SPEAKERS: int | None = None
