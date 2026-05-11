@@ -82,7 +82,12 @@ export const TranscriptPanel = ({
       </SectionLabel>
       <div style={{ marginTop: 4 }}>
         {visible.map((u, i) => {
-          const person = people[u.speaker];
+          const person = people[u.speaker] ?? {
+            id: u.speaker,
+            name: u.speaker,
+            initials: u.speaker.slice(0, 2).toUpperCase(),
+            color: 'var(--color-ink-tertiary)',
+          };
           const isActive = isLive && u.speaker === activeSpeakerId && i === currentUtterance;
           const isLiveText = isLive && i === currentUtterance && !u.final;
           return (
