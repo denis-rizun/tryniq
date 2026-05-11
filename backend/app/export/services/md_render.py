@@ -39,7 +39,7 @@ class MarkdownRenderer:
         if SectionId.TOPICS in sections and metadata.topics:
             chunks.append(self._render_topics(metadata.topics))
         if SectionId.GRAPH in sections and (graph.nodes or graph.edges):
-            chunks.append(self._render_graph(graph))
+            chunks.append(self._render_graph(graph, sections))
         if SectionId.SPEAKERS in sections and transcript.utterances:
             chunks.append(self._render_speakers(transcript.participants, transcript.utterances))
         if SectionId.TRANSCRIPT in sections and transcript.utterances:
@@ -101,10 +101,13 @@ class MarkdownRenderer:
         return "\n".join(lines)
 
     @classmethod
-    def _render_graph(cls, graph: GraphResponse) -> str:
+    def _render_graph(cls, graph: GraphResponse, sections: frozenset[SectionId]) -> str:
         lines = ["## Knowledge graph", ""]
         nodes_by_type: dict[NodeType, list[GraphNodeRead]] = defaultdict(list)
+        skip_types = cls._graph_types_rendered_elsewhere(sections)
         for node in graph.nodes:
+            if node.type in skip_types:
+                continue
             nodes_by_type[node.type].append(node)
 
         type_order: list[NodeType] = [
@@ -139,6 +142,16 @@ class MarkdownRenderer:
             lines.append("")
 
         return "\n".join(lines).rstrip()
+
+    @staticmethod
+    def _graph_types_rendered_elsewhere(sections: frozenset[SectionId]) -> set[NodeType]:
+        mapping = {
+            SectionId.DECISIONS: NodeType.DECISION,
+            SectionId.ACTIONS: NodeType.ACTION_ITEM,
+            SectionId.QUESTIONS: NodeType.OPEN_QUESTION,
+            SectionId.TOPICS: NodeType.TOPIC,
+        }
+        return {node_type for section, node_type in mapping.items() if section in sections}
 
     @staticmethod
     def _node_label(node: GraphNodeRead) -> str:
