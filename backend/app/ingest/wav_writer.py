@@ -16,6 +16,13 @@ class WavWriter:
 
         self._audio_buffer.extend(audio_chunk)
 
+    def pad_silence_to(self, target_bytes: int) -> None:
+        if self.closed:
+            return
+        gap = target_bytes - len(self._audio_buffer)
+        if gap > 0:
+            self._audio_buffer.extend(b"\x00" * gap)
+
     async def close(self) -> int:
         if self.closed:
             return 0

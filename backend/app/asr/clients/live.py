@@ -42,6 +42,7 @@ class LiveASRClient:
         participant_id: UUID | None,
         display_name: str | None,
         is_local_user: bool,
+        stream_offset_seconds: float,
     ) -> WorkerSession | None:
         async with self._lock:
             if not self._workers:
@@ -50,7 +51,9 @@ class LiveASRClient:
             worker = min(self._workers, key=lambda w: w.load)
             self._stream_index[stream_id] = worker
 
-        state = await worker.open_stream(meeting_id, stream_id, participant_id, display_name, is_local_user)
+        state = await worker.open_stream(
+            meeting_id, stream_id, participant_id, display_name, is_local_user, stream_offset_seconds
+        )
         if state is None:
             async with self._lock:
                 self._stream_index.pop(stream_id, None)

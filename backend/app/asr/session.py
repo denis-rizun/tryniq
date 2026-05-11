@@ -38,6 +38,7 @@ class WorkerSession:
         participant_id: UUID | None,
         display_name: str | None,
         is_local_user: bool,
+        stream_offset_seconds: float,
     ) -> StreamState | None:
         stream_idx = self.next_idx
         self.next_idx += 1
@@ -47,6 +48,7 @@ class WorkerSession:
             stream_idx=stream_idx,
             participant_id=participant_id,
             audio_queue=asyncio.Queue(maxsize=AUDIO_QUEUE_MAXSIZE),
+            stream_offset_seconds=stream_offset_seconds,
         )
         self.streams[stream_id] = state
         self.streams_by_idx[stream_idx] = state

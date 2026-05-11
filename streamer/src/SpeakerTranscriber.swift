@@ -8,7 +8,7 @@ actor SpeakerTranscriber {
 
     private var asrManager: SlidingWindowAsrManager?
     private var updatesTask: Task<Void, Never>?
-    private var samplesProcessed: Int = 0
+    private var lastEmittedEnd: Double = 0
     private let sampleRate: Double
 
     init(
@@ -29,18 +29,19 @@ actor SpeakerTranscriber {
         self.asrManager = manager
 
         let updates = await manager.transcriptionUpdates
-        let sampleRateCopy = self.sampleRate
         self.updatesTask = Task { [weak self] in
             for await update in updates {
                 guard self != nil else { return }
-                let processed = await self?.samplesProcessed ?? 0
-                let (tStart, tEnd) = TranscriptTiming.range(
-                    update: update,
-                    sampleRate: sampleRateCopy,
-                    samplesProcessed: processed
-                )
                 if update.isConfirmed {
-                    await onFinal(update.text, tStart, tEnd)
+                    let previousEnd = await self?.lastEmittedEnd ?? 0
+                    let newTokens = update.tokenTimings.filter { Double($0.startTime) >= previousEnd }
+                    guard let first = newTokens.first, let last = newTokens.last else { continue }
+                    let text = newTokens.map { $0.token }.joined()
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmed.isEmpty { continue }
+                    let newEnd = Double(last.endTime)
+                    await self?.setLastEmittedEnd(newEnd)
+                    await onFinal(text, Double(first.startTime), newEnd)
                 } else if !update.text.isEmpty {
                     await onPartial(update.text)
                 }
@@ -52,8 +53,11 @@ actor SpeakerTranscriber {
         guard let manager = asrManager,
               let buffer = PCMBufferDecoder.decode(littleEndianInt16: data, sampleRate: sampleRate)
         else { return }
-        samplesProcessed += Int(buffer.frameLength)
         await manager.streamAudio(buffer)
+    }
+
+    private func setLastEmittedEnd(_ value: Double) {
+        lastEmittedEnd = value
     }
 
     func finish() async {

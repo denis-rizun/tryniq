@@ -28,7 +28,12 @@ class TranscriptService:
         text: str,
         t_start: float,
         t_end: float,
-    ) -> Utterance:
+    ) -> Utterance | None:
+        if await self._is_contained_by_existing_live(stream_id, t_start, t_end):
+            return None
+
+        await self._delete_contained_live(stream_id, t_start, t_end)
+
         row = Utterance(
             meeting_id=meeting_id,
             participant_id=participant_id,
@@ -45,6 +50,27 @@ class TranscriptService:
         await self.session.commit()
         await self.session.refresh(row)
         return row
+
+    async def _is_contained_by_existing_live(self, stream_id: UUID, t_start: float, t_end: float) -> bool:
+        query = (
+            select(Utterance.id)
+            .where(Utterance.stream_id == stream_id)
+            .where(Utterance.is_final == False)  # noqa: E712
+            .where(Utterance.t_start <= t_start)
+            .where(Utterance.t_end >= t_end)
+            .limit(1)
+        )
+        result = await self.session.exec(query)
+        return result.one_or_none() is not None
+
+    async def _delete_contained_live(self, stream_id: UUID, t_start: float, t_end: float) -> None:
+        await self.session.exec(
+            delete(Utterance)
+            .where(Utterance.stream_id == stream_id)
+            .where(Utterance.is_final == False)  # noqa: E712
+            .where(Utterance.t_start >= t_start)
+            .where(Utterance.t_end <= t_end)
+        )
 
     async def replace_final_for_stream(
         self,

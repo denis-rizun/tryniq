@@ -1,5 +1,7 @@
 import asyncio
 import json
+import time
+from datetime import UTC, datetime
 from uuid import UUID
 
 import structlog
@@ -11,7 +13,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.asr.clients.live import LiveASRClient
 from app.config import config
 from app.ingest.client import minio_client
-from app.ingest.constants import INIT_VOICE_TIMEOUT
+from app.ingest.constants import BYTES_PER_SAMPLE, INIT_VOICE_TIMEOUT, SAMPLE_RATE
 from app.ingest.schemas import CONTROL_ADAPTER, StreamInitMessage
 from app.ingest.wav_writer import WavWriter
 from app.meeting.models import Meeting
@@ -33,20 +35,26 @@ class IngestService:
         self._participant_service = participant_service
         self._live_asr_client = live_asr_client
 
-    async def does_meeting_exist(self, meeting_id: UUID) -> bool:
-        result = await self._session.exec(select(Meeting.id).where(Meeting.id == meeting_id))
-        return result.one_or_none() is not None
+    async def get_meeting(self, meeting_id: UUID) -> Meeting | None:
+        result = await self._session.exec(select(Meeting).where(Meeting.id == meeting_id))
+        return result.one_or_none()
 
-    async def open_writer(self, meeting_id: UUID, stream_id: UUID) -> WavWriter:
+    async def open_writer(self, meeting_id: UUID, stream_id: UUID) -> tuple[WavWriter, bool]:
         primary_key = minio_client.get_stream_object_key(meeting_id, stream_id)
-        part = 2 if await minio_client.object_exists(primary_key) else 1
-        return WavWriter(minio_client.get_stream_object_key(meeting_id, stream_id, part))
+        is_continuation = await minio_client.object_exists(primary_key)
+        part = 2 if is_continuation else 1
+        return WavWriter(minio_client.get_stream_object_key(meeting_id, stream_id, part)), is_continuation
 
     async def handle_stream(self, ws: WebSocket, meeting_id: UUID, stream_id: UUID) -> None:
         await ws.accept()
 
         first_message = await self._validate_connection(ws, meeting_id, stream_id)
         if first_message is None:
+            return
+
+        meeting = await self.get_meeting(meeting_id)
+        if meeting is None:
+            await ws.close(code=status.WS_1008_POLICY_VIOLATION)
             return
 
         speaker = first_message.speaker
@@ -57,7 +65,14 @@ class IngestService:
             is_local_user=speaker.is_local_user,
         )
 
-        writer = await self.open_writer(meeting_id, stream_id)
+        writer, is_continuation = await self.open_writer(meeting_id, stream_id)
+        stream_offset_seconds = (
+            0.0 if is_continuation else max(0.0, (datetime.now(tz=UTC) - meeting.started_at).total_seconds())
+        )
+        offset_bytes = int(stream_offset_seconds * SAMPLE_RATE) * BYTES_PER_SAMPLE
+        if offset_bytes > 0:
+            writer.append(b"\x00" * offset_bytes)
+
         logger.debug(
             "Audio stream started",
             meeting_id=meeting_id,
@@ -66,6 +81,7 @@ class IngestService:
             is_local_user=speaker.is_local_user,
             object_key=writer.key,
             has_participant=participant is not None,
+            stream_offset_seconds=round(stream_offset_seconds, 3),
         )
 
         if config.asr.LIVE_ENABLED:
@@ -75,6 +91,7 @@ class IngestService:
                 participant_id=participant.id if participant else None,
                 display_name=speaker.display_name,
                 is_local_user=speaker.is_local_user,
+                stream_offset_seconds=stream_offset_seconds,
             )
         else:
             logger.info("live_asr: disabled by ASR_LIVE_ENABLED=false", stream_id=str(stream_id))
@@ -86,6 +103,7 @@ class IngestService:
             stream_id=stream_id,
             is_local_user=speaker.is_local_user,
             participant=participant,
+            offset_bytes=offset_bytes,
         )
 
     async def _try_create_participant(
@@ -140,7 +158,7 @@ class IngestService:
             await ws.close(code=status.WS_1008_POLICY_VIOLATION)
             return None
 
-        if not await self.does_meeting_exist(meeting_id):
+        if await self.get_meeting(meeting_id) is None:
             logger.warning("Meeting referenced by the WebSocket does not exist", meeting_id=meeting_id)
             await ws.close(code=status.WS_1008_POLICY_VIOLATION)
             return None
@@ -155,9 +173,12 @@ class IngestService:
         stream_id: UUID,
         is_local_user: bool,
         participant: Participant | None,
+        offset_bytes: int,
     ) -> None:
         discarded = False
         discard_reason: str | None = None
+        stream_started_monotonic = time.monotonic()
+        streamer_bytes_sent = 0
         try:
             while True:
                 frame = await ws.receive()
@@ -165,9 +186,17 @@ class IngestService:
                     break
 
                 if (audio_chunk := frame.get("bytes")) is not None:
+                    elapsed_seconds = time.monotonic() - stream_started_monotonic
+                    elapsed_bytes = int(elapsed_seconds * SAMPLE_RATE) * BYTES_PER_SAMPLE
+                    writer.pad_silence_to(offset_bytes + elapsed_bytes - len(audio_chunk))
                     writer.append(audio_chunk)
                     if config.asr.LIVE_ENABLED:
+                        pad_needed = elapsed_bytes - streamer_bytes_sent - len(audio_chunk)
+                        if pad_needed > 0:
+                            await self._live_asr_client.forward_audio_chunk(stream_id, b"\x00" * pad_needed)
+                            streamer_bytes_sent += pad_needed
                         await self._live_asr_client.forward_audio_chunk(stream_id, audio_chunk)
+                        streamer_bytes_sent += len(audio_chunk)
                     continue
 
                 if (raw_control_payload := frame.get("text")) is None:
@@ -240,6 +269,7 @@ class IngestService:
         participant_id: UUID | None,
         display_name: str | None,
         is_local_user: bool,
+        stream_offset_seconds: float,
     ) -> None:
         try:
             assigned = await self._live_asr_client.assign_stream(
@@ -248,6 +278,7 @@ class IngestService:
                 participant_id=participant_id,
                 display_name=display_name,
                 is_local_user=is_local_user,
+                stream_offset_seconds=stream_offset_seconds,
             )
             if assigned is None:
                 logger.info(

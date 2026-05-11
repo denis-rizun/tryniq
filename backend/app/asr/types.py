@@ -36,3 +36,4 @@ class StreamState:
     last_partial_text: str = ""
     sender_task: asyncio.Task[None] | None = None
     closed: bool = False
+    stream_offset_seconds: float = 0.0

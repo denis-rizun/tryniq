@@ -91,8 +91,8 @@ class LiveASRService:
             stream_id=event.stream_id,
             participant_id=state.participant_id,
             text=event.text,
-            t_start=event.t_start,
-            t_end=event.t_end,
+            t_start=event.t_start + state.stream_offset_seconds,
+            t_end=event.t_end + state.stream_offset_seconds,
         )
 
     async def _flush_pending_segments(self, worker: WorkerSession) -> None:
@@ -140,6 +140,9 @@ class LiveASRService:
             t_start=t_start,
             t_end=t_end,
         )
+        if utterance is None:
+            return None
+
         await redis_client.publish_transcript_segment(
             meeting_id=meeting_id,
             stream_id=stream_id,
