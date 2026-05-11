@@ -75,31 +75,6 @@ Memory budget per family:
 
 No model weights are sent off-machine. Audio never leaves the self-host stack.
 
-## 5. What worked well?
-
-> Filled in after the bake-off completes. Auto-injected hooks below.
-
-<!-- WORKED_WELL_START -->
-- _(populated by `uv run eval report` from `results/`)_
-<!-- WORKED_WELL_END -->
-
-## 6. What didn't work?
-
-> Filled in after the bake-off completes. Honest list of failures, blockers, and known regressions.
-
-<!-- DID_NOT_WORK_START -->
-- _(populated by `uv run eval report` from `results/`)_
-<!-- DID_NOT_WORK_END -->
-
-## 7. Should we build v2 on this stack?
-
-> Filled in after the bake-off. Recommendation will cite the result tables below directly.
-
-<!-- RECOMMENDATION_START -->
-- _(populated by `uv run eval report` from `results/`)_
-<!-- RECOMMENDATION_END -->
-
----
 
 ## Comparison tables (auto-generated)
 
