@@ -21,9 +21,11 @@ class ASRSettings(BaseSettings):
     FINAL_COMPUTE_TYPE: str = "int8"
     FINAL_LANGUAGE: str = "en"
     FINAL_INITIAL_PROMPT: str = (
-        "Tryniq, MinIO, TaskIQ, faster-whisper, large-v3-turbo, Postgres, pgvector, "
-        "Redis, Next.js, FastAPI, Moonshine, Silero, Anthropic, Claude, Ollama, "
-        "Qwen, Whisper, ECAPA, WebRTC, AudioWorklet, SQLModel, Alembic."
+        "Engineering standup. Topics include: pull request, PR review, code review, "
+        "auth middleware, rate limiting, requests per second, rps, p99, p95, latency, "
+        "rollback, deploy, staging, canary, health endpoint, payments service, "
+        "design doc, action item, open question, telemetry, dashboard, root cause, "
+        "embeddings, migration, refactor, ticket numbers like PAY-1247."
     )
 
     @property

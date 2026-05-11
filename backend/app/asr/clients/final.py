@@ -46,7 +46,12 @@ class FasterWhisperClient:
             source,
             language=config.asr.FINAL_LANGUAGE,
             word_timestamps=True,
-            vad_filter=False,
+            vad_filter=True,
+            vad_parameters={"min_silence_duration_ms": 500, "speech_pad_ms": 200},
+            log_prob_threshold=-1.0,
+            no_speech_threshold=0.6,
+            compression_ratio_threshold=2.4,
+            condition_on_previous_text=False,
             beam_size=5,
             initial_prompt=config.asr.FINAL_INITIAL_PROMPT,
         )
@@ -69,16 +74,49 @@ class FasterWhisperClient:
             if seg.avg_logprob is not None:
                 confidence = math.exp(seg.avg_logprob)
 
-            segments.append(
-                ASRSegment(
-                    t_start=float(seg.start),
-                    t_end=float(seg.end),
-                    text=seg.text.strip(),
-                    confidence=confidence,
-                    words=words,
+            for chunk in self._split_on_word_gaps(words):
+                chunk = self._strip_low_confidence_edges(chunk)
+                if not chunk:
+                    continue
+                text = "".join(w.word for w in chunk).strip()
+                if not text:
+                    continue
+                if confidence is not None and confidence < 0.35 and len(text) <= 8:
+                    continue
+                segments.append(
+                    ASRSegment(
+                        t_start=chunk[0].start,
+                        t_end=chunk[-1].end,
+                        text=text,
+                        confidence=confidence,
+                        words=chunk,
+                    )
                 )
-            )
         return segments
+
+    @staticmethod
+    def _split_on_word_gaps(words: list[WordTiming]) -> list[list[WordTiming]]:
+        max_gap_seconds = 1.5
+        if not words:
+            return []
+        chunks: list[list[WordTiming]] = [[words[0]]]
+        for previous, current in zip(words, words[1:], strict=False):
+            if current.start - previous.end > max_gap_seconds:
+                chunks.append([current])
+            else:
+                chunks[-1].append(current)
+        return chunks
+
+    @staticmethod
+    def _strip_low_confidence_edges(words: list[WordTiming]) -> list[WordTiming]:
+        threshold = 0.35
+        start = 0
+        while start < len(words) and (words[start].confidence or 1.0) < threshold:
+            start += 1
+        end = len(words)
+        while end > start and (words[end - 1].confidence or 1.0) < threshold:
+            end -= 1
+        return words[start:end]
 
 
 faster_whisper_client = FasterWhisperClient()
