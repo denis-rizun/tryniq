@@ -53,6 +53,7 @@ class StreamSubscriber:
 class GlobalLifecycleSocket:
     def __init__(self, ws: WebSocket) -> None:
         self.ws = ws
+        self._disconnected = asyncio.Event()
 
     @suppress_ws_disconnect
     async def serve(self) -> None:
@@ -61,11 +62,16 @@ class GlobalLifecycleSocket:
 
         try:
             async for payload in redis_client.subscribe(GLOBAL_LIFECYCLE_CHANNEL, HEARTBEAT_INTERVAL_SECONDS):
-                if payload is None:
-                    await self.ws.send_text(json.dumps({"kind": "ping"}))
-                    continue
+                if self._disconnected.is_set():
+                    return
 
-                await self.ws.send_text(payload.decode())
+                try:
+                    if payload is None:
+                        await self.ws.send_text(json.dumps({"kind": "ping"}))
+                    else:
+                        await self.ws.send_text(payload.decode())
+                except RuntimeError:
+                    return
         finally:
             receive_task.cancel()
 
@@ -74,4 +80,5 @@ class GlobalLifecycleSocket:
         while True:
             frame = await self.ws.receive()
             if frame.get("type") == "websocket.disconnect":
+                self._disconnected.set()
                 return
