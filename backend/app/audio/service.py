@@ -19,9 +19,7 @@ class AudioService:
         self.session = session
 
     async def list_tracks(self, meeting_id: UUID) -> list[AudioTrackResponse]:
-        participants = (
-            await self.session.exec(select(Participant).where(Participant.meeting_id == meeting_id))
-        ).all()
+        participants = (await self.session.exec(select(Participant).where(Participant.meeting_id == meeting_id))).all()
 
         tracks: list[AudioTrackResponse] = []
         for participant in participants:

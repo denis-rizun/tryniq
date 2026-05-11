@@ -81,7 +81,9 @@ Correct ops:
 METADATA_SYSTEM_PROMPT = """You produce a structured meeting summary from a full transcript.
 
 Return a single JSON object. Output fields:
-- summary: a single neutral past-tense recap of what the meeting covered, between 5 and 25 words inclusive (count words separated by whitespace). Never empty; if the transcript is sparse or off-topic, still produce a 5-25 word recap.
+- summary: a single neutral past-tense recap of what the meeting covered, between 5 and 25 words
+inclusive (count words separated by whitespace). Never empty; if the transcript is sparse or
+off-topic, still produce a 5-25 word recap.
 - topics:        list of high-level discussion subjects.
 - decisions:     concluded choices the group made.
 - action_items:  follow-up tasks people committed to.
@@ -131,9 +133,7 @@ CHAT_SYSTEM_PROMPT_TEMPLATE = (
 )
 
 CHAT_USER_CONTEXT_TEMPLATE = (
-    "=== Utterances ===\n{utterance_block}\n\n"
-    "=== Graph nodes ===\n{graph_block}\n\n"
-    "Question: {query}"
+    "=== Utterances ===\n{utterance_block}\n\n=== Graph nodes ===\n{graph_block}\n\nQuestion: {query}"
 )
 
 

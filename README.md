@@ -132,7 +132,3 @@ The `GET /api/v1/models` endpoint reports the active configuration at runtime.
 - **Streamer** (`streamer/Package.swift`): `fluid_audio` (Parakeet-TDT v2 via CoreML).
 - **Frontend** (`frontend/package.json`): Next.js 16 App Router, React 19, TanStack Query, Zustand, Biome, Cytoscape (graph view).
 - **Extension** (`extension/package.json`): Vite 8 + TypeScript 5.7, React 19 (popup only), `onnxruntime-web` (Silero VAD inside the AudioWorklet). Manifest V3, `MAIN`-world `injected.js` (WebRTC patch) + `ISOLATED`-world `content.js` (DOM observer + per-stream WebSocket clients).
-
-## Status
-
-Phases 1–6 are **done**: capture (extension), live transcription (Swift streamer), graph builder + metadata projection, graph + notes UI, post-processing + chat RAG + Markdown export + cross-meeting search + uploaded-recording fallback, and demo-week polish. Phase 7 (cross-meeting speaker memory via ECAPA, inline transcript editing with localized re-extraction) is **deferred to post-demo**. See [`docs/PRD.md`](docs/PRD.md) §14. Target demo: 2026-05-11.

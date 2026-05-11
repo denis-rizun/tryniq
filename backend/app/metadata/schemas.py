@@ -55,9 +55,7 @@ class ExtractedMetadata(BaseSchema):
     def _check_summary_word_count(cls, value: str) -> str:
         words = value.split()
         if not (SUMMARY_MIN_WORDS <= len(words) <= SUMMARY_MAX_WORDS):
-            raise ValueError(
-                f"summary must be {SUMMARY_MIN_WORDS}-{SUMMARY_MAX_WORDS} words, got {len(words)}"
-            )
+            raise ValueError(f"summary must be {SUMMARY_MIN_WORDS}-{SUMMARY_MAX_WORDS} words, got {len(words)}")
         return value
 
 
