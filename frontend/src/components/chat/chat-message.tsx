@@ -1,50 +1,23 @@
 import { memo, useMemo } from 'react';
+import { Streamdown } from 'streamdown';
 import type { ChatCitationView, ChatMessage as ChatMessageType } from '@/lib/types';
+
+const CITE_HREF_PREFIX = '#cite-';
 
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const buildCitationRegex = (labels: string[]): RegExp | null => {
   if (labels.length === 0) return null;
   const sorted = [...new Set(labels)].sort((a, b) => b.length - a.length).map(escapeRegex);
-  return new RegExp(`(\\[(?:${sorted.join('|')})\\])`, 'g');
+  return new RegExp(`\\[(${sorted.join('|')})\\]`, 'g');
 };
 
-const renderAsstText = (
-  text: string,
-  re: RegExp | null,
-  labelMap: Map<string, ChatCitationView>,
-  onCite?: (c: ChatCitationView) => void,
-) => {
-  if (!re) {
-    return [
-      <span key={0} style={{ whiteSpace: 'pre-wrap' }}>
-        {text}
-      </span>,
-    ];
-  }
-  return text.split(re).map((part, i) => {
-    const inner = /^\[(.+)\]$/.exec(part);
-    if (inner) {
-      const c = labelMap.get(inner[1]);
-      if (c) {
-        return (
-          <span
-            key={i}
-            className="cite-chip mono"
-            onClick={() => onCite?.(c)}
-            style={{ marginLeft: 0 }}
-          >
-            {c.label}
-          </span>
-        );
-      }
-    }
-    return (
-      <span key={i} style={{ whiteSpace: 'pre-wrap' }}>
-        {part}
-      </span>
-    );
-  });
+const annotateCitations = (text: string, re: RegExp | null): string => {
+  if (!re) return text;
+  return text.replace(
+    re,
+    (_, label) => `[${label}](${CITE_HREF_PREFIX}${encodeURIComponent(label)})`,
+  );
 };
 
 interface ChatMessageProps {
@@ -53,7 +26,7 @@ interface ChatMessageProps {
   animate?: boolean;
 }
 
-const ChatMessageImpl = ({ m, onCite, animate }: ChatMessageProps) => {
+const ChatMessageImpl = ({ m, onCite }: ChatMessageProps) => {
   const citations = m.citations;
   const re = useMemo(
     () => buildCitationRegex((citations ?? []).map((c) => c.label)),
@@ -63,28 +36,41 @@ const ChatMessageImpl = ({ m, onCite, animate }: ChatMessageProps) => {
     () => new Map((citations ?? []).map((c) => [c.label, c] as const)),
     [citations],
   );
+  const annotated = useMemo(() => annotateCitations(m.text, re), [m.text, re]);
 
   if (m.role === 'user') return <div className="chat-msg-user">{m.text}</div>;
 
-  // Word-by-word animation only on settled messages — animating during token stream
-  // remounts every span on every token (O(N²) and visually glitchy).
-  const showWordAnim = animate && !m.pending;
-  const words = showWordAnim ? m.text.split(/(\s+)/) : null;
+  const components = {
+    a: ({
+      href,
+      children,
+    }: {
+      href?: string;
+      children?: React.ReactNode;
+    }) => {
+      if (href?.startsWith(CITE_HREF_PREFIX)) {
+        const label = decodeURIComponent(href.slice(CITE_HREF_PREFIX.length));
+        const c = labelMap.get(label);
+        if (c) {
+          return (
+            <span className="cite-chip mono" onClick={() => onCite?.(c)}>
+              {c.label}
+            </span>
+          );
+        }
+      }
+      return (
+        <a href={href} target="_blank" rel="noreferrer">
+          {children}
+        </a>
+      );
+    },
+  };
 
   return (
     <div>
-      <div className="chat-msg-asst">
-        {words
-          ? words.map((w, i) =>
-              /^\s+$/.test(w) ? (
-                <span key={i}>{w}</span>
-              ) : (
-                <span key={i} className="word-in" style={{ animationDelay: `${i * 30}ms` }}>
-                  {renderAsstText(w, re, labelMap, onCite)}
-                </span>
-              ),
-            )
-          : renderAsstText(m.text, re, labelMap, onCite)}
+      <div className="chat-msg-asst chat-md">
+        <Streamdown components={components}>{annotated}</Streamdown>
       </div>
       {m.model && (
         <div className="chat-msg-asst-meta mono">

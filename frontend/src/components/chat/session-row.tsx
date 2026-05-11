@@ -1,3 +1,4 @@
+import { stripMarkdown } from '@/lib/format';
 import type { ChatSession } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -9,8 +10,9 @@ interface SessionRowProps {
 }
 
 export const SessionRow = ({ session, isActive, onClick, preview }: SessionRowProps) => {
-  const previewText =
+  const rawPreview =
     preview ?? session.messages.find((m) => m.role === 'user')?.text ?? '(empty)';
+  const previewText = stripMarkdown(rawPreview);
   return (
     <div className={cn('session-row', isActive && 'active')} onClick={() => onClick(session)}>
       <div className="session-title">
