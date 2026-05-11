@@ -59,7 +59,6 @@ const PROCESSING_STATUSES: ReadonlySet<MeetingStatus> = new Set([
   'normalizing',
   'diarizing',
   'transcribing',
-  'finalizing',
 ]);
 
 export const isActive = (s: MeetingStatus | undefined): boolean =>
@@ -81,17 +80,17 @@ export const toMeetingListItem = (m: MeetingResponse): MeetingListItem => {
   return {
     id: m.id,
     title: m.title,
-    // TODO(api): backend list endpoint doesn't include participants yet
     participants: [],
+    participantsCount: m.participants_count,
     state: toState(m.status),
     duration: finalDuration,
     durationLive: liveDuration,
     startedAt: formatStartedAt(m.started_at),
     relativeStart: active ? 'live now' : formatRelative(m.started_at),
-    // TODO(api): topics/decisions/questions counts not in backend yet (Phase 3)
     topPills: [],
-    decCount: 0,
-    qCount: 0,
+    topicsCount: m.topics_count,
+    decCount: m.decisions_count,
+    qCount: m.open_questions_count,
   };
 };
 
@@ -132,7 +131,13 @@ export const toMeeting = (t: TranscriptResponse, title: string): AdaptedTranscri
   const participantSlugById: Record<string, string> = {};
   const people: PeopleMap = {};
   t.participants.forEach((p, idx) => {
-    const slug = slugifyName(p.name, idx);
+    const base = slugifyName(p.name, idx);
+    let slug = base;
+    let suffix = 2;
+    while (people[slug]) {
+      slug = `${base}_${suffix}`;
+      suffix += 1;
+    }
     participantSlugById[p.id] = slug;
     const isPlaceholder = p.name === 'You';
     const displayName = p.is_local_user && !isPlaceholder ? `${p.name} (You)` : p.name;
