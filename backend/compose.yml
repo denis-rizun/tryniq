@@ -72,6 +72,11 @@ services:
     image: tryniq-backend:dev
     command: ["worker"]
     logging: *default-logging
+    environment:
+      OMP_NUM_THREADS: ${WORKER_OMP_THREADS:-8}
+      MKL_NUM_THREADS: ${WORKER_OMP_THREADS:-8}
+      ORT_NUM_THREADS: ${WORKER_OMP_THREADS:-8}
+      TORCH_NUM_THREADS: ${WORKER_OMP_THREADS:-8}
     depends_on:
 #      migration:
 #        condition: service_completed_successfully
@@ -83,6 +88,8 @@ services:
         condition: service_healthy
     volumes:
       - whisper-models:/home/appuser/.cache
+    healthcheck:
+      disable: true
 
   redis:
     image: redis:7-alpine
@@ -190,9 +197,7 @@ services:
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
       CLICKHOUSE_CLUSTER_ENABLED: "false"
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      REDIS_AUTH: ""
+      REDIS_CONNECTION_STRING: redis://redis:6379
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_BUCKET:-langfuse}
       LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
       LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
