@@ -38,8 +38,9 @@ class ChatResponder:
         context: RetrievedContext,
         session_id: UUID | None = None,
     ) -> AsyncIterator[AnswerEvent]:
-        system_prompt = self.prompt_builder.build_system_prompt(scope, context)
-        messages = self.prompt_builder.build_messages(system_prompt, history, query)
+        system_prompt = self.prompt_builder.build_system_prompt(scope)
+        user_content = self.prompt_builder.build_user_message(scope, context, query)
+        messages = self.prompt_builder.build_messages(system_prompt, history, user_content)
 
         ai_client = get_ai_client()
         model = config.chat.LLM_MODEL

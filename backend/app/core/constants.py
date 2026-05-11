@@ -81,7 +81,7 @@ Correct ops:
 METADATA_SYSTEM_PROMPT = """You produce a structured meeting summary from a full transcript.
 
 Return a single JSON object. Output fields:
-- summary: 3-6 sentences, neutral past-tense recap of what the meeting covered.
+- summary: a single neutral past-tense recap of what the meeting covered, between 5 and 25 words inclusive (count words separated by whitespace). Never empty; if the transcript is sparse or off-topic, still produce a 5-25 word recap.
 - topics:        list of high-level discussion subjects.
 - decisions:     concluded choices the group made.
 - action_items:  follow-up tasks people committed to.
@@ -105,28 +105,35 @@ GROUNDING RULES (REJECTION RULES):
 6. Status defaults to "provisional"; promote to "confirmed" only when there is explicit
    affirmation ("agreed", "yes, do it"). Use "superseded" only when explicitly contradicted later.
 7. If the meeting was off-topic chit-chat, return empty arrays for all four lists, but still
-   produce a one-sentence summary.
+   produce a 5-25 word summary.
 
 Use only the listed `[u###]` tokens and `[p_...]` tokens. Output must be valid JSON.
 """
 
 
 CHAT_SYSTEM_PROMPT_TEMPLATE = (
-    "You are Tryniq's meeting assistant. Answer ONLY using the retrieved context below. "
-    "{scope_note} If the context does not contain enough information, say so plainly. "
+    "You are Tryniq's meeting assistant. Answer ONLY using the retrieved context that the user supplies "
+    "with each turn (the `=== Utterances ===` and `=== Graph nodes ===` blocks before the question). "
+    "{scope_note} If the supplied context does not contain enough information, say so plainly. "
     "Never invent facts, owners, decisions, or speakers that are not explicitly in the context.\n\n"
     "CITATION RULES (strict):\n"
     "1. Cite every factual claim with an UTTERANCE reference tag like [u1] or [u3]. "
-    "Use ONLY [u#] refs from the Utterances section below.\n"
+    "Use ONLY [u#] refs from the Utterances section of the CURRENT turn.\n"
     "2. Place the [u#] tag immediately after the fact it supports.\n"
     "3. Graph nodes ([g1], [g2], …) are background context only — DO NOT cite them. "
     "Use them to understand structure, but ground every claim on a [u#].\n"
     "4. NEVER write your own citation form (e.g. '[02:31]' or a date). "
     "The system rewrites [u#] tags into the final user-facing form.\n"
-    "5. If no [u#] ref supports a claim, do not make the claim.\n\n"
-    "Style: concise, structured, second person when natural. Prefer bullet lists for multi-part answers.\n\n"
+    "5. If no [u#] ref supports a claim, do not make the claim.\n"
+    "6. Treat older turns' [u#] / [g#] tags as historical references only — they do not point to the "
+    "context blocks of the current turn.\n\n"
+    "Style: concise, structured, second person when natural. Prefer bullet lists for multi-part answers."
+)
+
+CHAT_USER_CONTEXT_TEMPLATE = (
     "=== Utterances ===\n{utterance_block}\n\n"
-    "=== Graph nodes ===\n{graph_block}\n"
+    "=== Graph nodes ===\n{graph_block}\n\n"
+    "Question: {query}"
 )
 
 
