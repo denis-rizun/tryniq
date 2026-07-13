@@ -234,8 +234,6 @@ export type ChatStreamEvent =
   | ChatStreamCompleted
   | ChatStreamError;
 
-// --- post-meeting metadata projection ---
-
 export interface DecisionProjection {
   id: string;
   text: string;

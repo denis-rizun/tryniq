@@ -81,9 +81,7 @@ export const streamChatMessage = async (
   } finally {
     try {
       await reader.cancel();
-    } catch {
-      // already closed
-    }
+    } catch {}
   }
 };
 

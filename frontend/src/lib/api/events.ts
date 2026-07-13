@@ -28,9 +28,7 @@ export const subscribeMeetingEvents = (
     if (!msg.data) return;
     try {
       onEvent(JSON.parse(msg.data) as LiveEvent);
-    } catch {
-      // ignore malformed payloads
-    }
+    } catch {}
   };
   MEETING_EVENT_KINDS.forEach((kind) => {
     source.addEventListener(kind, handle);
@@ -83,9 +81,7 @@ export const subscribeGlobalEvents = ({
       try {
         const parsed = JSON.parse(msg.data) as GlobalEvent;
         onEvent(parsed);
-      } catch {
-        // ignore malformed payloads
-      }
+      } catch {}
     };
   };
 
