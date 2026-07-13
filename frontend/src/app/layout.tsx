@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
-import { GlobalEventsProvider } from '@/lib/api/global-events-provider';
-import { QueryProvider } from '@/lib/api/query-client';
 import { ShellOverlays } from '@/components/shell/shell-overlays';
 import { Sidebar } from '@/components/shell/sidebar';
 import { Toaster } from '@/components/shell/toaster';
 import { Topbar } from '@/components/shell/topbar';
+import { GlobalEventsProvider } from '@/lib/api/global-events-provider';
+import { QueryProvider } from '@/lib/api/query-client';
 import './globals.css';
 
 export const metadata: Metadata = {

@@ -79,8 +79,7 @@ export const MeetingSettings = ({ meeting }: { meeting: Meeting }) => {
                   disabled={busyKey === key}
                   onClick={() => onDownload(track.stream_id, track.part)}
                 >
-                  <Icon name="download" size={12} />{' '}
-                  {busyKey === key ? 'Downloading…' : 'Download'}
+                  <Icon name="download" size={12} /> {busyKey === key ? 'Downloading…' : 'Download'}
                 </button>
               </div>
             );

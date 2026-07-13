@@ -5,29 +5,29 @@ description = "tryniq - open-source meeting intelligence platform"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "aioboto3>=13.2.0",
-    "alembic>=1.18.4",
+    "aioboto3>=15.5.0",
+    "alembic>=1.18.5",
     "asyncpg>=0.31.0",
-    "fastapi>=0.135.1",
-    "greenlet>=3.3.2",
-    "psycopg[binary]>=3.3.3",
-    "pydantic[email]>=2.12.5",
-    "pydantic-settings>=2.13.1",
-    "redis>=7.3.0",
-    "sqlmodel>=0.0.37",
-    "structlog>=25.5.0",
-    "taskiq>=0.12.1",
-    "taskiq-redis>=1.2.2",
-    "pgvector>=0.3",
-    "uvicorn>=0.42.0",
-    "websockets>=14.0",
-    "types-aiobotocore-s3>=3.5.0",
-    "faster-whisper>=1.0.3",
-    "numpy>=1.26",
-    "onnxruntime>=1.20",
-    "openai>=1.55.0",
-    "python-multipart>=0.0.20",
-    "langfuse>=4.5.1",
+    "fastapi>=0.139.0",
+    "greenlet>=3.5.3",
+    "psycopg[binary]>=3.3.4",
+    "pydantic[email]>=2.13.4",
+    "pydantic-settings>=2.14.2",
+    "redis>=8.0.1",
+    "sqlmodel>=0.0.39",
+    "structlog>=26.1.0",
+    "taskiq>=0.12.4",
+    "taskiq-redis>=1.2.3",
+    "pgvector>=0.5.0",
+    "uvicorn>=0.51.0",
+    "websockets>=16.1",
+    "types-aiobotocore-s3>=3.7.0",
+    "faster-whisper>=1.2.1",
+    "numpy>=2.5.1",
+    "onnxruntime>=1.27.0",
+    "openai>=2.45.0",
+    "python-multipart>=0.0.32",
+    "langfuse>=4.14.0",
 ]
 
 [project.optional-dependencies]
@@ -44,7 +44,7 @@ mlx = [
 
 [dependency-groups]
 dev = [
-    "ruff>=0.15.7",
+    "ruff>=0.15.21",
 ]
 
 

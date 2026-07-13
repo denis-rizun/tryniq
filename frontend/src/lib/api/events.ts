@@ -32,7 +32,9 @@ export const subscribeMeetingEvents = (
       // ignore malformed payloads
     }
   };
-  MEETING_EVENT_KINDS.forEach((kind) => source.addEventListener(kind, handle));
+  MEETING_EVENT_KINDS.forEach((kind) => {
+    source.addEventListener(kind, handle);
+  });
 
   return () => source.close();
 };

@@ -13,7 +13,13 @@ interface GraphScrubberProps {
 
 const PLAY_SECONDS = 8;
 
-export const GraphScrubber = ({ scrub, setScrub, durationLabel, playing, setPlaying }: GraphScrubberProps) => {
+export const GraphScrubber = ({
+  scrub,
+  setScrub,
+  durationLabel,
+  playing,
+  setPlaying,
+}: GraphScrubberProps) => {
   const rafRef = useRef<number | null>(null);
   const lastTsRef = useRef<number | null>(null);
   const scrubRef = useRef(scrub);

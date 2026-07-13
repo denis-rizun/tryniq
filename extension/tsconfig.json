@@ -11,8 +11,7 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "types": ["chrome", "vite/client"],
-    "baseUrl": "."
+    "types": ["chrome", "vite/client"]
   },
   "include": ["src", "vite.config.ts"]
 }

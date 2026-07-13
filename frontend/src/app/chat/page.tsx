@@ -1,13 +1,14 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChatMessage } from '@/components/chat/chat-message';
-import { ScopeToggle, type Scope } from '@/components/chat/scope-toggle';
+import { type Scope, ScopeToggle } from '@/components/chat/scope-toggle';
 import { SessionRow } from '@/components/chat/session-row';
 import { Icon } from '@/components/ui/icon';
 import { SectionLabel } from '@/components/ui/section-label';
+import { toChatMessage, toChatSessionDetail, toChatSessionList } from '@/lib/api/adapters';
 import {
   createChatSession,
   getChatSession,
@@ -15,7 +16,6 @@ import {
   streamChatMessage,
 } from '@/lib/api/chat';
 import { listMeetings } from '@/lib/api/meetings';
-import { toChatMessage, toChatSessionDetail, toChatSessionList } from '@/lib/api/adapters';
 import type { MeetingResponse } from '@/lib/api/types';
 import { useUIStore } from '@/lib/store';
 import type { ChatCitationView, ChatMessage as ChatMessageView } from '@/lib/types';
@@ -167,10 +167,13 @@ const ChatPage = () => {
     router.push(`/meetings/${c.meetingId}/overview?cite=${c.tStart}`);
   };
 
-  const sendDisabled = streaming || !draft.trim() || (effectiveScope === 'meeting' && !effectiveMeetingId);
+  const sendDisabled =
+    streaming || !draft.trim() || (effectiveScope === 'meeting' && !effectiveMeetingId);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', height: 'calc(100vh - 48px)' }}>
+    <div
+      style={{ display: 'grid', gridTemplateColumns: '320px 1fr', height: 'calc(100vh - 48px)' }}
+    >
       <div
         style={{
           borderRight: '1px solid var(--color-border)',
@@ -277,100 +280,102 @@ const ChatPage = () => {
               gap: 10,
             }}
           >
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-            <textarea
-              className="chat-textarea"
-              style={{ flex: 1, minHeight: 60, maxHeight: 180 }}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
-                  e.preventDefault();
-                  void handleSend();
-                }
-              }}
-              placeholder={
-                effectiveScope === 'meeting'
-                  ? selectedMeeting
-                    ? `Ask anything about "${selectedMeeting.title}"…`
-                    : 'Pick a meeting below to ask about it…'
-                  : 'Ask anything across your meetings…'
-              }
-              disabled={streaming}
-            />
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() => void handleSend()}
-              disabled={sendDisabled}
-              style={{ alignSelf: 'flex-end' }}
-            >
-              <Icon name="send" size={12} color="var(--color-paper)" /> Send
-            </button>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              flexWrap: 'wrap',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <ScopeToggle
-                scope={effectiveScope}
-                onChange={handleScopeChange}
-                disabled={scopeLocked}
-                meetingDisabled={finalMeetings.length === 0}
-                meetingDisabledTitle="No finalized meetings yet"
-              />
-              <span className="kbd mono" title="Enter to send, Shift+Enter for newline">
-                ↵ send
-              </span>
-            </div>
-            {effectiveScope === 'meeting' && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontSize: 12,
-                  color: 'var(--color-ink-secondary)',
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <textarea
+                className="chat-textarea"
+                style={{ flex: 1, minHeight: 60, maxHeight: 180 }}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    void handleSend();
+                  }
                 }}
+                placeholder={
+                  effectiveScope === 'meeting'
+                    ? selectedMeeting
+                      ? `Ask anything about "${selectedMeeting.title}"…`
+                      : 'Pick a meeting below to ask about it…'
+                    : 'Ask anything across your meetings…'
+                }
+                disabled={streaming}
+              />
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => void handleSend()}
+                disabled={sendDisabled}
+                style={{ alignSelf: 'flex-end' }}
               >
-                <span style={{ textTransform: 'uppercase', letterSpacing: '0.08em' }}>about</span>
-                {active ? (
-                  <span className="mono" style={{ color: 'var(--color-ink)' }}>
-                    {selectedMeeting?.title ?? effectiveMeetingId}
-                  </span>
-                ) : (
-                  <select
-                    value={draftMeetingId ?? ''}
-                    onChange={(e) => setDraftMeetingId(e.target.value || null)}
-                    disabled={scopeLocked || finalMeetings.length === 0}
-                    style={{
-                      padding: '4px 8px',
-                      border: '1px solid var(--color-border)',
-                      background: 'var(--color-paper)',
-                      fontFamily: 'inherit',
-                      fontSize: 12,
-                      maxWidth: 280,
-                    }}
-                  >
-                    {finalMeetings.length === 0 && <option value="">No meetings available</option>}
-                    {finalMeetings.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.title}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <Icon name="send" size={12} color="var(--color-paper)" /> Send
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <ScopeToggle
+                  scope={effectiveScope}
+                  onChange={handleScopeChange}
+                  disabled={scopeLocked}
+                  meetingDisabled={finalMeetings.length === 0}
+                  meetingDisabledTitle="No finalized meetings yet"
+                />
+                <span className="kbd mono" title="Enter to send, Shift+Enter for newline">
+                  ↵ send
+                </span>
               </div>
-            )}
+              {effectiveScope === 'meeting' && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: 12,
+                    color: 'var(--color-ink-secondary)',
+                  }}
+                >
+                  <span style={{ textTransform: 'uppercase', letterSpacing: '0.08em' }}>about</span>
+                  {active ? (
+                    <span className="mono" style={{ color: 'var(--color-ink)' }}>
+                      {selectedMeeting?.title ?? effectiveMeetingId}
+                    </span>
+                  ) : (
+                    <select
+                      value={draftMeetingId ?? ''}
+                      onChange={(e) => setDraftMeetingId(e.target.value || null)}
+                      disabled={scopeLocked || finalMeetings.length === 0}
+                      style={{
+                        padding: '4px 8px',
+                        border: '1px solid var(--color-border)',
+                        background: 'var(--color-paper)',
+                        fontFamily: 'inherit',
+                        fontSize: 12,
+                        maxWidth: 280,
+                      }}
+                    >
+                      {finalMeetings.length === 0 && (
+                        <option value="">No meetings available</option>
+                      )}
+                      {finalMeetings.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
         </div>
       </div>
     </div>

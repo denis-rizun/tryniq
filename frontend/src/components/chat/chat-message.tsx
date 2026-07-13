@@ -28,10 +28,7 @@ interface ChatMessageProps {
 
 const ChatMessageImpl = ({ m, onCite }: ChatMessageProps) => {
   const citations = m.citations;
-  const re = useMemo(
-    () => buildCitationRegex((citations ?? []).map((c) => c.label)),
-    [citations],
-  );
+  const re = useMemo(() => buildCitationRegex((citations ?? []).map((c) => c.label)), [citations]);
   const labelMap = useMemo(
     () => new Map((citations ?? []).map((c) => [c.label, c] as const)),
     [citations],
@@ -41,13 +38,7 @@ const ChatMessageImpl = ({ m, onCite }: ChatMessageProps) => {
   if (m.role === 'user') return <div className="chat-msg-user">{m.text}</div>;
 
   const components = {
-    a: ({
-      href,
-      children,
-    }: {
-      href?: string;
-      children?: React.ReactNode;
-    }) => {
+    a: ({ href, children }: { href?: string; children?: React.ReactNode }) => {
       if (href?.startsWith(CITE_HREF_PREFIX)) {
         const label = decodeURIComponent(href.slice(CITE_HREF_PREFIX.length));
         const c = labelMap.get(label);

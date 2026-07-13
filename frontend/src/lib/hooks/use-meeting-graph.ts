@@ -2,11 +2,11 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
-import { adaptGraph } from '@/lib/api/graph-adapter';
+import type { GraphEdge, GraphNode } from '@/components/meeting/graph/graph-data';
 import { subscribeMeetingEvents } from '@/lib/api/events';
+import { adaptGraph } from '@/lib/api/graph-adapter';
 import { getMeetingGraph } from '@/lib/api/meetings';
 import type { GraphPatchEvent, GraphResponse, LiveEvent } from '@/lib/api/types';
-import type { GraphEdge, GraphNode } from '@/components/meeting/graph/graph-data';
 
 const graphKey = (meetingId: string) => ['meeting-graph', meetingId] as const;
 
@@ -33,7 +33,10 @@ export interface UseMeetingGraphResult {
   isError: boolean;
 }
 
-export const useMeetingGraph = (meetingId: string, enabled: boolean = true): UseMeetingGraphResult => {
+export const useMeetingGraph = (
+  meetingId: string,
+  enabled: boolean = true,
+): UseMeetingGraphResult => {
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: graphKey(meetingId),
@@ -45,13 +48,18 @@ export const useMeetingGraph = (meetingId: string, enabled: boolean = true): Use
     if (!enabled || !meetingId) return;
     const handle = (event: LiveEvent) => {
       if (event.kind !== 'graph_patch') return;
-      queryClient.setQueryData<GraphResponse>(graphKey(meetingId), (prev) => applyPatch(prev, event));
+      queryClient.setQueryData<GraphResponse>(graphKey(meetingId), (prev) =>
+        applyPatch(prev, event),
+      );
     };
     const unsubscribe = subscribeMeetingEvents(meetingId, { onEvent: handle });
     return () => unsubscribe();
   }, [meetingId, enabled, queryClient]);
 
-  const adapted = useMemo(() => (query.data ? adaptGraph(query.data) : { nodes: [], edges: [] }), [query.data]);
+  const adapted = useMemo(
+    () => (query.data ? adaptGraph(query.data) : { nodes: [], edges: [] }),
+    [query.data],
+  );
 
   return {
     nodes: adapted.nodes,

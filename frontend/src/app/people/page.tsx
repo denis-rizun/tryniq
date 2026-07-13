@@ -87,9 +87,7 @@ const PeoplePage = () => {
           ))}
         </div>
       )}
-      {selected && (
-        <PersonDrawer person={selected.person} onClose={() => setSelectedName(null)} />
-      )}
+      {selected && <PersonDrawer person={selected.person} onClose={() => setSelectedName(null)} />}
     </div>
   );
 };

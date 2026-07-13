@@ -118,9 +118,7 @@ export const CommandPalette = ({ open, onClose, onAction }: CommandPaletteProps)
     [searchQuery.data],
   );
 
-  const actions = BASE_ACTIONS.filter(
-    (a) => !q || a.label.toLowerCase().includes(q.toLowerCase()),
-  );
+  const actions = BASE_ACTIONS.filter((a) => !q || a.label.toLowerCase().includes(q.toLowerCase()));
   const askRow: PaletteAction[] = q.trim()
     ? [{ id: 'ask', label: `Ask AI: "${q}"`, kbd: '↵', isAsk: true }]
     : [];

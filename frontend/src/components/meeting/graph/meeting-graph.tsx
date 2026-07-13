@@ -12,7 +12,10 @@ import { GraphScrubber } from './graph-scrubber';
 import { GraphSidePanel } from './graph-side-panel';
 import { tidyLayout } from './tidy-layout';
 
-const useElementSize = (): [React.RefObject<HTMLDivElement | null>, { width: number; height: number }] => {
+const useElementSize = (): [
+  React.RefObject<HTMLDivElement | null>,
+  { width: number; height: number },
+] => {
   const ref = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ width: 800, height: 520 });
   useEffect(() => {

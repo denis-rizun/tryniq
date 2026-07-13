@@ -3,17 +3,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Scope } from '@/components/chat/scope-toggle';
+import { toChatMessage, toChatSessionDetail, toChatSessionList } from '@/lib/api/adapters';
 import {
   createChatSession,
   getChatSession,
   listChatSessions,
   streamChatMessage,
 } from '@/lib/api/chat';
-import {
-  toChatMessage,
-  toChatSessionDetail,
-  toChatSessionList,
-} from '@/lib/api/adapters';
 import type { ChatScope } from '@/lib/api/types';
 import { useUIStore } from '@/lib/store';
 import type { ChatMessage, ChatSession } from '@/lib/types';
@@ -100,6 +96,7 @@ export const useAIDrawer = (
   }, [sessions, filter, meetingId]);
 
   const messageCount = active?.messages.length ?? 0;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: messageCount and streamingId are intentional scroll triggers, not read in the effect body
   useEffect(() => {
     if (msgsRef.current) msgsRef.current.scrollTop = msgsRef.current.scrollHeight;
   }, [messageCount, streamingId]);

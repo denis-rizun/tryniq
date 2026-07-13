@@ -41,8 +41,7 @@ const OverviewPage = ({ params }: Props) => {
 
   const adapted = useMemo(() => {
     if (!transcriptQuery.data) return null;
-    const title =
-      meetingsQuery.data?.find((m) => m.id === id)?.title ?? 'Untitled meeting';
+    const title = meetingsQuery.data?.find((m) => m.id === id)?.title ?? 'Untitled meeting';
     const out = toMeeting(transcriptQuery.data, title);
     if (metadataQuery.data) {
       out.meeting = applyMeetingMetadata(out.meeting, metadataQuery.data);

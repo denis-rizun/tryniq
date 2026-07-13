@@ -9,7 +9,7 @@ import { SectionLabel } from '@/components/ui/section-label';
 import { fetchMeetingExport } from '@/lib/api/exports';
 import { listMeetings } from '@/lib/api/meetings';
 import { cn } from '@/lib/utils';
-import { type BlockState } from './build-preview';
+import type { BlockState } from './build-preview';
 import { EXPORT_BLOCKS, EXPORT_FORMATS } from './export-config';
 
 interface ExportModalProps {
@@ -101,9 +101,7 @@ export const ExportModal = ({ meetingId, onClose }: ExportModalProps) => {
 
   useEffect(() => {
     if (previewQuery.error) {
-      setError(
-        previewQuery.error instanceof Error ? previewQuery.error.message : 'Preview failed',
-      );
+      setError(previewQuery.error instanceof Error ? previewQuery.error.message : 'Preview failed');
     }
   }, [previewQuery.error]);
 

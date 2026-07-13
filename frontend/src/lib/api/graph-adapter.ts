@@ -1,11 +1,16 @@
 import type {
+  GraphEdge,
+  GraphNode,
+  NodeKind,
+  NodeStatus,
+} from '@/components/meeting/graph/graph-data';
+import type {
   GraphEdgeRead,
   GraphEdgeType,
   GraphNodeRead,
   GraphNodeType,
   GraphResponse,
 } from '@/lib/api/types';
-import type { GraphEdge, GraphNode, NodeKind, NodeStatus } from '@/components/meeting/graph/graph-data';
 
 const KIND_BY_TYPE: Record<GraphNodeType, NodeKind> = {
   Meeting: 'meeting',
@@ -27,7 +32,9 @@ const labelFor = (n: GraphNodeRead): string => {
 
 const ownerlessFor = (n: GraphNodeRead, edges: GraphEdgeRead[]): boolean => {
   if (n.type !== 'ActionItem' && n.type !== 'Decision') return false;
-  return !edges.some((e) => e.from_id === n.id && (e.type === 'ASSIGNED_TO' || e.type === 'MADE_DECISION'));
+  return !edges.some(
+    (e) => e.from_id === n.id && (e.type === 'ASSIGNED_TO' || e.type === 'MADE_DECISION'),
+  );
 };
 
 const utteranceTime = (n: GraphNodeRead): number | null => {

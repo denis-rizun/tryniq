@@ -17,5 +17,4 @@ export const downloadAudioTrack = (
   meetingId: string,
   streamId: string,
   part: number,
-): Promise<BlobResponse> =>
-  apiGetBlob(`/meetings/${meetingId}/audio/${streamId}?part=${part}`);
+): Promise<BlobResponse> => apiGetBlob(`/meetings/${meetingId}/audio/${streamId}?part=${part}`);

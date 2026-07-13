@@ -48,7 +48,11 @@ export const useGraphSimulation = (
         Object.assign(existing, g);
         return existing;
       }
-      return { ...g, x: width / 2 + (Math.random() - 0.5) * 80, y: height / 2 + (Math.random() - 0.5) * 80 };
+      return {
+        ...g,
+        x: width / 2 + (Math.random() - 0.5) * 80,
+        y: height / 2 + (Math.random() - 0.5) * 80,
+      };
     });
 
     linksRef.current = graphEdges.map((e) => ({
@@ -59,17 +63,27 @@ export const useGraphSimulation = (
 
     if (!simRef.current) {
       simRef.current = forceSimulation<SimNode, SimLink>(nodesRef.current)
-        .force('link', forceLink<SimNode, SimLink>(linksRef.current).id((d) => d.id).distance(80).strength(0.6))
+        .force(
+          'link',
+          forceLink<SimNode, SimLink>(linksRef.current)
+            .id((d) => d.id)
+            .distance(80)
+            .strength(0.6),
+        )
         .force('charge', forceManyBody().strength(-220))
         .force('center', forceCenter(width / 2, height / 2))
-        .force('collide', forceCollide<SimNode>().radius((n) => radiusFor(n.kind) + 6))
+        .force(
+          'collide',
+          forceCollide<SimNode>().radius((n) => radiusFor(n.kind) + 6),
+        )
         .force('x', forceX(width / 2).strength(0.04))
         .force('y', forceY(height / 2).strength(0.04))
         .alphaDecay(0.035)
         .on('tick', () => setTick((t) => t + 1));
     } else {
       simRef.current.nodes(nodesRef.current);
-      const linkForce = simRef.current.force<ReturnType<typeof forceLink<SimNode, SimLink>>>('link');
+      const linkForce =
+        simRef.current.force<ReturnType<typeof forceLink<SimNode, SimLink>>>('link');
       linkForce?.links(linksRef.current);
       simRef.current.force('center', forceCenter(width / 2, height / 2));
       simRef.current.alpha(0.7).restart();

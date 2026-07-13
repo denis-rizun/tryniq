@@ -123,7 +123,10 @@ const computeInitials = (name: string): string => {
 };
 
 const slugifyName = (name: string, idx: number): string => {
-  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  const base = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
   return base || `speaker_${idx + 1}`;
 };
 
@@ -184,8 +187,7 @@ const formatRelatedMeetingDate = (iso: string): string => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-const formatTimeOrDash = (t: number | null): string =>
-  t == null ? '—' : formatTimestamp(t);
+const formatTimeOrDash = (t: number | null): string => (t == null ? '—' : formatTimestamp(t));
 
 const toDecision = (d: DecisionProjection): Decision => ({
   id: d.id,

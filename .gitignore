@@ -72,6 +72,7 @@ coverage.xml
 dmypy.json
 
 node_modules/
+.pnpm-store/
 .pnp
 .pnp.js
 .yarn/install-state.gz

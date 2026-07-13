@@ -87,11 +87,7 @@ export const NotesPanel = ({
           </div>
         ) : (
           meeting.previousMeetings.map((prev) => (
-            <div
-              key={prev.id}
-              className="note-item"
-              style={{ borderLeft: 'none', paddingLeft: 0 }}
-            >
+            <div key={prev.id} className="note-item" style={{ borderLeft: 'none', paddingLeft: 0 }}>
               <span className="mono" style={{ fontSize: 11, color: 'var(--color-ink-tertiary)' }}>
                 {prev.date}
               </span>
@@ -107,9 +103,7 @@ export const NotesPanel = ({
                 </a>
               </span>
               {prev.relatedTopics.length > 0 ? (
-                <div
-                  style={{ fontSize: 12, color: 'var(--color-ink-secondary)', marginTop: 2 }}
-                >
+                <div style={{ fontSize: 12, color: 'var(--color-ink-secondary)', marginTop: 2 }}>
                   Linked topics: {prev.relatedTopics.join(', ')}
                 </div>
               ) : null}

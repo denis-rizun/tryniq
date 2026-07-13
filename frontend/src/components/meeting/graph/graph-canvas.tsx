@@ -1,9 +1,9 @@
 'use client';
 
 import { select } from 'd3-selection';
-import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom';
+import { type ZoomBehavior, zoom, zoomIdentity } from 'd3-zoom';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { type SimLink, type SimNode, radiusFor } from '@/lib/hooks/use-graph-simulation';
+import { radiusFor, type SimLink, type SimNode } from '@/lib/hooks/use-graph-simulation';
 import { colorFor, type GraphEdge, type GraphNode } from './graph-data';
 
 interface GraphCanvasProps {
@@ -75,7 +75,9 @@ export const GraphCanvas = ({
         const target = event.target as Element | null;
         return !target?.closest('g.node');
       })
-      .on('zoom', (event) => setTransform({ k: event.transform.k, x: event.transform.x, y: event.transform.y }));
+      .on('zoom', (event) =>
+        setTransform({ k: event.transform.k, x: event.transform.x, y: event.transform.y }),
+      );
     zoomRef.current = z;
     select(svgRef.current).call(z);
     return () => {
@@ -139,7 +141,12 @@ export const GraphCanvas = ({
       ref={svgRef}
       width={width}
       height={height}
-      style={{ width: '100%', height: '100%', display: 'block', cursor: draggingId ? 'grabbing' : 'grab' }}
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        cursor: draggingId ? 'grabbing' : 'grab',
+      }}
       onClick={onBackgroundClick}
     >
       <title>Knowledge graph</title>
@@ -189,10 +196,19 @@ export const GraphCanvas = ({
                 e.stopPropagation();
                 if (draggingIdRef.current === null) onSelect(n);
               }}
-              style={{ cursor: draggingId === n.id ? 'grabbing' : 'pointer', opacity: opacity * enter }}
+              style={{
+                cursor: draggingId === n.id ? 'grabbing' : 'pointer',
+                opacity: opacity * enter,
+              }}
             >
               {isSelected && (
-                <circle r={r + 6} fill="none" stroke="var(--color-accent-500)" strokeWidth={1.5} opacity={0.7} />
+                <circle
+                  r={r + 6}
+                  fill="none"
+                  stroke="var(--color-accent-500)"
+                  strokeWidth={1.5}
+                  opacity={0.7}
+                />
               )}
               <circle
                 r={r * (0.4 + 0.6 * enter)}

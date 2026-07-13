@@ -10,8 +10,7 @@ interface SessionRowProps {
 }
 
 export const SessionRow = ({ session, isActive, onClick, preview }: SessionRowProps) => {
-  const rawPreview =
-    preview ?? session.messages.find((m) => m.role === 'user')?.text ?? '(empty)';
+  const rawPreview = preview ?? session.messages.find((m) => m.role === 'user')?.text ?? '(empty)';
   const previewText = stripMarkdown(rawPreview);
   return (
     <div className={cn('session-row', isActive && 'active')} onClick={() => onClick(session)}>

@@ -19,9 +19,7 @@ export const MeetingsClient = ({ meetings, loadError }: Props) => {
   const [q, setQ] = useState('');
   const openExport = useUIStore((s) => s.openExport);
 
-  const filtered = meetings.filter(
-    (m) => !q || m.title.toLowerCase().includes(q.toLowerCase()),
-  );
+  const filtered = meetings.filter((m) => !q || m.title.toLowerCase().includes(q.toLowerCase()));
 
   return (
     <div style={{ padding: '24px 32px', maxWidth: 1300, margin: '0 auto' }}>

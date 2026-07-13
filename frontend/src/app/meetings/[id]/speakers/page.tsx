@@ -27,8 +27,7 @@ const SpeakersPage = ({ params }: Props) => {
     return <div className="empty">Could not load meeting.</div>;
   }
 
-  const title =
-    meetingsQuery.data?.find((m) => m.id === id)?.title ?? 'Untitled meeting';
+  const title = meetingsQuery.data?.find((m) => m.id === id)?.title ?? 'Untitled meeting';
   const { meeting, people } = toMeeting(transcriptQuery.data, title);
 
   return <SpeakersPanel meeting={meeting} people={people} />;
