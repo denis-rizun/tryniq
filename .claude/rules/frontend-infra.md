@@ -17,9 +17,9 @@ Binding rules for environment access, configuration, and operational concerns.
 
 ## Stylesheet & assets
 
-- The **single** global stylesheet is `src/app/globals.css`. It is the verbatim copy of the Signal design system stylesheet plus shadcn theme tokens and the Tailwind import.
+- The **single** global stylesheet is `src/app/globals.css`. It carries the Tryniq "Lab paper" design system (CSS custom properties + component classes) plus shadcn theme tokens.
 - Do not create additional `.css` files anywhere under `src/`. No CSS Modules. No `*.module.css`.
-- Fonts: load `Inter` via `next/font/google` and bind it to the `font-family` declarations already present in `globals.css`.
+- Fonts: `Inter` (UI) and `JetBrains Mono` (code / timestamps) are loaded in `src/app/layout.tsx` and bound to the `font-family` declarations already present in `globals.css`.
 - Static assets live in `frontend/public/`. Reference them with absolute paths (`/logo.svg`), never relative.
 
 ## Logging & observability

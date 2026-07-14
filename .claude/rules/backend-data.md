@@ -24,7 +24,7 @@ Rules for Pydantic schemas, SQLModel tables, and configuration.
   model_config = SQLModelConfig(extra="allow")
   ```
 
-- Table names are **singular** (`"user"`, `"refresh_token"`, `"environment_weight"`) — never plural. Reserved words (`user`) are fine; SQLAlchemy quotes them, but raw SQL in migrations must quote them explicitly (`"user"`).
+- Table names are **singular** (`"meeting"`, `"participant"`, `"graph_node"`) — never plural. Reserved words are fine; SQLAlchemy quotes them, but raw SQL in migrations must quote them explicitly.
 - Do not pass `nullable=False` — SQLModel infers nullability from the annotation (`str` → NOT NULL, `str | None` → NULL). Pass `nullable=` only to override that inference.
 - Use the mixins in `app/core/database.py`: `IDMixin` (UUID PK with `uuid4` default) and `TimestampMixin` (created_at / updated_at, timezone-aware, with auto-update event listener). MRO: `class Foo(IDMixin, TimestampMixin, SQLModel, table=True): ...`.
 - Datetimes are timezone-aware UTC: `Field(default_factory=lambda: datetime.now(tz=UTC), sa_type=DateTime(timezone=True))`. Never use naive datetimes.
@@ -44,43 +44,39 @@ Rules for Pydantic schemas, SQLModel tables, and configuration.
   ```python
   from sqlalchemy.dialects.postgresql import ENUM
 
-  environment = ENUM(
-      "MALL",
-      "GROCERY",
-      "OUTDOOR_BILLBOARD",
-      "OUTDOOR_STREET_FURNITURE",
-      "TRANSIT_RAIL",
-      "TRANSIT_BUS",
-      "AIRPORT",
-      "OTHER",
-      name="environment",
+  meeting_status = ENUM(
+      "LIVE",
+      "FINALIZING",
+      "FINAL",
+      "FAILED",
+      name="meetingstatus",
       create_type=False,
   )
 
 
   def upgrade() -> None:
       bind = op.get_bind()
-      environment.create(bind, checkfirst=True)
-      op.create_table("environment_weight", sa.Column("environment", environment, nullable=False), ...)
+      meeting_status.create(bind, checkfirst=True)
+      op.create_table("meeting", sa.Column("status", meeting_status, nullable=False), ...)
 
 
   def downgrade() -> None:
-      op.drop_table("environment_weight")
-      environment.drop(op.get_bind(), checkfirst=True)
+      op.drop_table("meeting")
+      meeting_status.drop(op.get_bind(), checkfirst=True)
   ```
 
   Downstream migration (reuses the type — no create/drop):
 
   ```python
-  environment = ENUM(..., name="environment", create_type=False)
+  meeting_status = ENUM(..., name="meetingstatus", create_type=False)
 
 
   def upgrade() -> None:
-      op.create_table("screen", sa.Column("environment", environment, nullable=False), ...)
+      op.create_table("meeting_status_history", sa.Column("status", meeting_status, nullable=False), ...)
 
 
   def downgrade() -> None:
-      op.drop_table("screen")
+      op.drop_table("meeting_status_history")
   ```
 
 ## Configuration

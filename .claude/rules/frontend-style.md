@@ -31,8 +31,8 @@ paths:
 - Arrow function expressions assigned to a `const`, then exported (named export preferred).
 
   ```tsx
-  export const ScreenRow = ({ screen }: { screen: Screen }) => (
-    <li className="ranked-list__row">{screen.name}</li>
+  export const UtteranceRow = ({ utterance }: { utterance: Utterance }) => (
+    <li className="utterance">{utterance.text}</li>
   );
   ```
 
@@ -41,9 +41,9 @@ paths:
 
 ## Styling
 
-- **The Signal stylesheet `signal.css` is sacred.** It is copied verbatim into `src/app/globals.css`. Do not rename classes, do not split it into pieces, do not convert rules to Tailwind utilities. If a screen needs a style, find the existing class for it.
-- Components apply styling primarily via `className` strings that map to selectors already defined in `globals.css`: `.navrail`, `.app-shell`, `.basket`, `.ranked-list`, `.chip`, `.t-eyebrow`, `.seg`, `.slider`, ... — read the stylesheet before naming a new class.
-- **shadcn primitives are allowed for behavior** (Dialog, Popover, Tooltip, Select, Sheet, DropdownMenu, Toast/Sonner, Command). Their generated classes stay as-is. Wrap them in a feature component (`<PlanSaveDialog>`) that applies the Signal className taxonomy on the visible surface.
+- **The Tryniq "Lab paper" stylesheet is sacred.** It lives in `src/app/globals.css`. Do not rename classes, do not split it into pieces, do not convert rules to Tailwind utilities. If a surface needs a style, find the existing class for it.
+- Components apply styling primarily via `className` strings that map to selectors already defined in `globals.css`: `.app-shell`, `.sidebar`, `.topbar`, `.drawer`, `.utterance`, `.meetings-table`, `.graph-canvas`, `.cite-chip`, `.btn`, `.filter-chip`, ... — read the stylesheet before naming a new class.
+- **shadcn primitives are allowed for behavior** (Dialog, Popover, Tooltip, Select, Sheet, DropdownMenu, Toast/Sonner, Command). Their generated classes stay as-is. Wrap them in a feature component (`<ExportModal>`) that applies the Lab-paper className taxonomy on the visible surface.
 - **Tailwind utilities are a last resort**, used only when a shadcn primitive forces them or for a truly one-off layout primitive (a `flex` row, a `gap`). They are not the default styling mechanism.
 - Inline `style={{ ... }}` is acceptable for one-off layout primitives. Do not escalate it into a styling system.
 - Use `clsx` via the `cn` helper in `lib/utils.ts` for conditional classNames.
@@ -54,14 +54,14 @@ paths:
 - Files: `kebab-case.ts` / `kebab-case.tsx`. Hooks: `use-<thing>.ts`. Route entrypoints: `page.tsx`, `layout.tsx` (Next conventions).
 - Types/interfaces/components: `PascalCase`. Functions/variables/props: `camelCase`. Constants: `UPPER_SNAKE_CASE` only for true module-level constants (`NAV_ITEMS`, `DEFAULT_FILTERS`).
 - Wire-format type suffix: `Response` (REST). Discriminator field on tagged unions is `kind`.
-- UI-facing domain types live in `lib/types.ts` with no suffix (`Screen`, `Poi`, `Plan`).
-- Adapter functions: `to<UIType>` (e.g. `toScreen`, `toPlan`).
-- Hooks are camelCase verbs prefixed with `use` (`useFilters`, `usePlan`, `useRankedScreens`).
+- UI-facing domain types live in `lib/types.ts` with no suffix (`Meeting`, `Utterance`, `Person`).
+- Adapter functions: `to<UIType>` (e.g. `toMeeting`, `toUtterance`).
+- Hooks are camelCase verbs prefixed with `use` (`useLiveTranscript`, `useMeetingGraph`, `useAIDrawer`).
 
 ## Destructive actions
 
 - **Every delete (or otherwise irreversible) action goes through a confirmation modal** before the mutation fires. The trigger button only opens the confirmation; only the confirm button calls `mutate()`.
-- The confirmation is a nested `.modal-scrim` / `.modal` with `role="alertdialog"`, names the thing being deleted and its blast radius (e.g. "“Luxury retail” and its 12 POIs will be removed"), and offers Cancel plus a danger-styled confirm. Escape and scrim-click close the confirmation, not the parent modal.
+- The confirmation is a nested `.backdrop` / `.modal` with `role="alertdialog"`, names the thing being deleted and its blast radius (e.g. "“Weekly sync” and its transcript, notes, and audio will be removed"), and offers Cancel plus a `.btn-danger` confirm. Escape and backdrop-click close the confirmation, not the parent modal.
 - The only exception is when the user explicitly asks to skip the confirmation for a given action.
 
 ## Doing the right amount

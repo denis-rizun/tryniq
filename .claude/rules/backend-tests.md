@@ -98,7 +98,7 @@ uv run pytest tests/path/to/test_x.py::TestSubject::test_behavior
 
 ## Test database
 
-Tests share the dev Postgres instance, but use a **separate database** named by `POSTGRES_TEST_DATABASE` (default `a8media_test`). The dev DB is never touched by tests — the `test_database_url` fixture refuses to run if `TEST_DATABASE` equals `DATABASE`.
+Tests share the dev Postgres instance, but use a **separate database** named by `POSTGRES_TEST_DATABASE` (default `tryniq_test`). The dev DB is never touched by tests — the `test_database_url` fixture refuses to run if `TEST_DATABASE` equals `DATABASE`.
 
 Schema for the test DB is built directly from `SQLModel.metadata`, not from alembic. The `test_engine` session-scoped fixture is the single source of truth:
 

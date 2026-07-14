@@ -10,9 +10,9 @@ Binding rules for frontend testing. Minimal by design — the backend has its ow
 
 ## Layers
 
-- **Unit** — pure functions in `lib/` (adapters, format helpers, geo helpers, ranking math). Colocate as `<thing>.test.ts` next to the source file. Use **Vitest**.
+- **Unit** — pure functions in `lib/` (adapters, format helpers). Colocate as `<thing>.test.ts` next to the source file. Use **Vitest**.
 - **Component** — React Testing Library, colocated as `<component>.test.tsx`. Render with the providers required by the component (mostly `QueryClientProvider` with a fresh client per test). Use **Vitest** + `@testing-library/react` + `jsdom`.
-- **End-to-end** — deferred to Phase 2 unless a flow is explicitly listed in `Signal BRD GoWombat v1.0.md` as needing an automated check. When introduced, lives under `frontend/e2e/` and uses **Playwright**.
+- **End-to-end** — deferred unless a flow is explicitly listed in `docs/PRD.md` as needing an automated check. When introduced, lives under `frontend/e2e/` and uses **Playwright**.
 
 ## Rules
 
@@ -27,5 +27,5 @@ Binding rules for frontend testing. Minimal by design — the backend has its ow
 ```bash
 pnpm test                       # vitest run
 pnpm test --watch               # watch mode
-pnpm test src/lib/geo.test.ts   # single file
+pnpm test src/lib/format.test.ts   # single file
 ```

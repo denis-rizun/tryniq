@@ -25,27 +25,24 @@ paths:
 - **Blank lines separate logical steps inside a function** — `ruff format` won't add these, so it's on you. A guard block (`if ... : continue` / `raise` / `return`) is followed by a blank line before the next step, and a `try/except` block is almost always followed by a blank line before the code that uses its result. The goal is to read a function as a sequence of distinct steps rather than one dense wall. Example:
 
   ```python
-  for row in csv.reader(io.StringIO(text)):
-      if not row:
+  for participant in participants:
+      if participant.is_local_user:
           continue
 
-      if len(row) != 1:
-          raise InvalidPostcodeFileError()
+      name = self.resolve_name(participant.stream_id)
+      if not name:
+          raise ParticipantNameUnresolvedError()
 
-      postcode = cls._normalise(row[0])
-      if not UK_POSTCODE_PATTERN.match(postcode):
-          raise InvalidPostcodeFileError()
-
-      postcodes[postcode] = None
+      resolved[participant.stream_id] = name
   ```
 
   ```python
   try:
-      text = raw.decode("utf-8-sig")
-  except UnicodeDecodeError as exc:
-      raise InvalidPostcodeFileError() from exc
+      operations = GRAPH_OPERATIONS_ADAPTER.validate_python(payload)
+  except ValidationError as exc:
+      raise AIValidationError(kind="graph_ops", detail=str(exc)) from exc
 
-  rows: dict[str, dict[str, Any]] = {}
+  nodes: dict[str, GraphNode] = {}
   ```
 
   Apply judgment — keep genuinely cohesive one-liners together; don't pad every line. The rule is about grouping distinct steps, not maximising whitespace.
@@ -53,13 +50,13 @@ paths:
 
   ```python
   # bad — the return is orphaned from the line that feeds it
-  means = [(cell, sums[cell] / counts[cell]) for cell in sums]
+  responses = [MeetingResponse.model_validate(meeting) for meeting in meetings]
 
-  return self._normalise_cells(means)
+  return self._with_counts(responses)
 
   # good
-  means = [(cell, sums[cell] / counts[cell]) for cell in sums]
-  return self._normalise_cells(means)
+  responses = [MeetingResponse.model_validate(meeting) for meeting in meetings]
+  return self._with_counts(responses)
   ```
 - Truthy checks for non-numeric / non-string types: prefer `if not x` / `if x` over `if x is None` / `if x is not None` for objects, models, collections, UUIDs, datetimes, and other reference types. Reserve `is None` for primitives where a falsy non-None value (`0`, `0.0`, `""`, `False`) is a meaningful, distinct case from absence.
 - Inject collaborators via `__init__`; do not instantiate them inside the class. Constructor parameters are required and typed; no `dep: Foo | None = None` "optional" placeholders that fall back to `Foo()`. The composition root (FastAPI dependency factories in `<feature>/dependencies.py`) owns construction.

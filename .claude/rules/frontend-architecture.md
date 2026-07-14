@@ -20,52 +20,60 @@ Binding rules for module layout, server/client split, imports, and component sha
 frontend/
     src/
         app/                     # Next.js App Router (file-based routing)
-            layout.tsx           # root shell — providers only
+            layout.tsx           # root shell (app-shell chrome) + providers
             globals.css          # the only stylesheet in the app
-            (app)/               # authenticated route group
-                layout.tsx       # AppShell (nav rail + top bar)
-                page.tsx         # / planning
-                ai/page.tsx
-                plans/page.tsx
-                admin/page.tsx
-                account/page.tsx
-                inventory/page.tsx
-            login/page.tsx       # public route — no shell
+            page.tsx             # / landing
+            meetings/
+                page.tsx         # meetings directory
+                meetings-client.tsx
+                [id]/
+                    layout.tsx   # per-meeting shell (tabs)
+                    page.tsx
+                    overview/page.tsx
+                    graph/page.tsx
+                    speakers/page.tsx
+                    settings/page.tsx
+            people/page.tsx
+            chat/page.tsx
+            upload/page.tsx
+            extension/page.tsx
         components/
-            ui/                  # primitive presentational pieces (shadcn + Signal)
-            shell/               # app chrome (nav-rail, top-bar, app-shell)
-            <feature>/           # feature components (screens, plans, map, ai, admin, ...)
+            ui/                  # primitive presentational pieces (shadcn + Icon registry)
+            shell/               # app chrome (sidebar, topbar, breadcrumb, overlays, toaster)
+            <feature>/           # feature components (meeting, meetings-list, people, chat, ...)
         lib/
             api/                 # typed backend client (see frontend-data.md)
                 client.ts
                 types.ts
                 adapters.ts
                 query-client.tsx
-                auth.ts
-                users.ts
+                events.ts
+                meetings.ts
+                people.ts
+                chat.ts
             hooks/               # reusable client hooks (use-*.ts)
             mock/                # placeholder data for surfaces the backend does not serve yet
             store.ts             # single Zustand UI store
             config.ts            # centralised env access
             types.ts             # UI-facing domain types
             format.ts            # pure format helpers
-            geo.ts               # H3 / lat-long helpers
             utils.ts             # tiny shared helpers (cn, ...)
 ```
 
-## Signal feature modules
+## Feature modules
 
-These are the only `<feature>` slices for Phase 1. Do not invent new ones without adding a row here:
+These are the `<feature>` slices that exist. Do not invent new ones without adding a row here:
 
-- `screens/` — ranked list, screen row, screen-detail popover, filter column.
-- `pois/` — POI markers, POI category picker.
-- `audience-segments/` — segment picker (Captify + Mastercard), segment AND/OR logic.
-- `plans/` — basket, plan list, plan save dialog.
-- `map/` — `signal-map.tsx`, layers (heatmap, radius, poi-markers, screen-markers).
-- `ai/` — recommendation card and AI brief input.
-- `admin/` — screen uploads, POI uploads, weights config.
-- `account/` — account settings.
-- `auth/` — login form.
+- `meeting/` — meeting header, tabs, graph canvas, settings.
+- `meetings-list/` — meetings directory table and toolbar.
+- `people/` — person row, person drawer.
+- `chat/` — AI drawer, chat message, session row, scope toggle, composer.
+- `command-palette/` — global command palette.
+- `export/` — export modal and preview builder.
+- `upload/` — recording dropzone and upload progress.
+- `extension/` — extension popup surface.
+- `shell/` — app chrome (sidebar, topbar, breadcrumb, overlays, toaster).
+- `ui/` — primitives (icon, avatar, pill, checkbox, status-dot, ...).
 
 ## Rules
 
@@ -79,7 +87,7 @@ These are the only `<feature>` slices for Phase 1. Do not invent new ones withou
 
 - Default to a **Server Component**. Add `'use client'` only when the file needs browser APIs, hooks, event handlers, or state.
 - Provider components (`QueryProvider`, `Toaster`) are mounted once in `src/app/layout.tsx`. Do not re-mount providers per route.
-- The `AppShell` lives in `src/app/(app)/layout.tsx`. `/login` lives outside the group and has no shell.
+- The app-shell chrome (sidebar + topbar) lives in the root `src/app/layout.tsx`; per-meeting tabs live in `src/app/meetings/[id]/layout.tsx`. There is no auth/login route yet — auth/RBAC is a planned feature. When it lands, add a public `login/` route outside the shell and gate the app behind an authenticated route group (`(app)/`), keeping the providers mounted in the root `layout.tsx`.
 - Never import server-only modules from client files (no `fs`, no secrets). Browser-visible env vars start with `NEXT_PUBLIC_` and go through `lib/config.ts`.
 
 ## Imports
@@ -100,7 +108,7 @@ These are the only `<feature>` slices for Phase 1. Do not invent new ones withou
 - Props are typed inline for one or two fields, or via a sibling `interface FooProps { ... }` for three or more.
 - No `React.FC`. No `function` declarations for components. No `defaultProps`.
 - Hooks: file name `use-<thing>.ts` in `lib/hooks/`. The exported hook is `useThing`. One hook per file.
-- Event handlers are `onX` (e.g. `onClickScreen`, `onChangeRadius`) — present-tense verbs, no `did`/`will` prefix.
+- Event handlers are `onX` (e.g. `onClickMeeting`, `onChangeScope`) — present-tense verbs, no `did`/`will` prefix.
 
 ## When you're not sure
 
