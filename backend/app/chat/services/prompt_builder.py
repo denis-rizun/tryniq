@@ -1,11 +1,11 @@
-from app.chat.clients.context_builder import ContextBuilder
 from app.chat.constants import (
     SCOPE_NOTE_ALL,
     SCOPE_NOTE_MEETING,
-    AnswerHistoryMessage,
     ChatScope,
-    RetrievedContext,
 )
+from app.chat.services.context_builder import ContextBuilder
+from app.chat.services.responder import AnswerHistoryMessage
+from app.chat.services.retrieval import RetrievedContext
 from app.core.constants import CHAT_SYSTEM_PROMPT_TEMPLATE, CHAT_USER_CONTEXT_TEMPLATE
 
 

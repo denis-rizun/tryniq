@@ -1,4 +1,6 @@
-from app.chat.constants import ChatScope, GraphHit, RetrievedContext, UtteranceHit
+from app.chat.constants import ChatScope
+from app.chat.services.graph_hits import GraphHit
+from app.chat.services.retrieval import RetrievedContext, UtteranceHit
 
 
 class ContextBuilder:
@@ -16,7 +18,7 @@ class ContextBuilder:
         if scope == ChatScope.ALL and hit.meeting_started_at:
             meeting_part = f" meeting={hit.meeting_started_at.date().isoformat()}"
         speaker_part = f" speaker={hit.speaker}" if hit.speaker else ""
-        return f"[{hit.ref}] t={_mmss(hit.t_start)}{meeting_part}{speaker_part}: {hit.text}"
+        return f"[{hit.ref}] t={format_mmss(hit.t_start)}{meeting_part}{speaker_part}: {hit.text}"
 
     @staticmethod
     def _format_graph(scope: ChatScope, hit: GraphHit) -> str:
@@ -26,6 +28,6 @@ class ContextBuilder:
         return f"[{hit.ref}] {hit.type}{meeting_part}: {hit.text}"
 
 
-def _mmss(t: float) -> str:
+def format_mmss(t: float) -> str:
     total = max(0, int(t))
     return f"{total // 60:02d}:{total % 60:02d}"

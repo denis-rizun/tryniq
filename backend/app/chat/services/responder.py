@@ -1,33 +1,54 @@
 import re
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import structlog
 
-from app.chat.clients.prompt_builder import PromptBuilder
 from app.chat.constants import (
     CROSS_LABEL_MAX_LEN,
     GRAPH_REF_PATTERN,
     REF_PATTERN,
-    AnswerComplete,
-    AnswerDelta,
-    AnswerEvent,
-    AnswerHistoryMessage,
     ChatScope,
-    RetrievedContext,
-    UtteranceHit,
 )
 from app.chat.schemas import ChatCitation
+from app.chat.services.context_builder import format_mmss
+from app.chat.services.retrieval import RetrievedContext, UtteranceHit
 from app.config import config
 from app.core.client import get_ai_client
 from app.core.constants import AIRequestKind, ChatRequest
 
+if TYPE_CHECKING:
+    from app.chat.services.prompt_builder import PromptBuilder
+
 logger = structlog.get_logger()
 
 
+@dataclass(slots=True)
+class AnswerHistoryMessage:
+    role: str
+    text: str
+
+
+@dataclass(slots=True)
+class AnswerDelta:
+    text: str
+
+
+@dataclass(slots=True)
+class AnswerComplete:
+    text: str
+    citations: list[ChatCitation]
+    model: str
+
+
+type AnswerEvent = AnswerDelta | AnswerComplete
+
+
 class ChatResponder:
-    def __init__(self, prompt_builder: PromptBuilder) -> None:
+    def __init__(self, prompt_builder: "PromptBuilder") -> None:
         self.prompt_builder = prompt_builder
 
     async def stream_answer(
@@ -123,11 +144,6 @@ class ChatResponder:
         rendered = rendered.strip()
         citations = [used[uid] for uid in order]
         return rendered, citations
-
-
-def format_mmss(t: float) -> str:
-    total = max(0, int(t))
-    return f"{total // 60:02d}:{total % 60:02d}"
 
 
 def _format_citation_label(scope: ChatScope, hit: UtteranceHit) -> str:
