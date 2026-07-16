@@ -6,8 +6,9 @@ from starlette.websockets import WebSocket
 
 from app.db import SessionDep
 from app.meeting.models import Meeting
-from app.meeting.service import MeetingService
-from app.meeting.stream import GlobalLifecycleSocket, StreamSubscriber
+from app.meeting.services.lifecycle_socket import GlobalLifecycleSocket
+from app.meeting.services.meeting import MeetingService
+from app.meeting.services.stream_subscriber import StreamSubscriber
 
 
 def get_meeting_service(session: SessionDep) -> MeetingService:

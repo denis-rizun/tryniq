@@ -15,7 +15,7 @@ router = APIRouter(prefix="/meetings", tags=["meetings"])
     summary="Create Meeting",
     description="Create a new meeting.",
     responses={
-        404: {"model": ErrorResponse, "description": "Meeting not found"},
+        400: {"model": ErrorResponse, "description": "Invalid Google Meet URL"},
     },
 )
 async def create_meeting(body: MeetingCreateRequest, service: MeetingServiceDep) -> MeetingResponse:
