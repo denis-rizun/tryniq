@@ -4,7 +4,7 @@ from uuid import UUID
 
 from app.export.constants import SectionId
 from app.graph.constants import NodeType
-from app.graph.schemas import GraphNodeRead, GraphResponse
+from app.graph.schemas import GraphNodeResponse, GraphResponse
 from app.meeting.models import Meeting
 from app.metadata.schemas import (
     ActionItemProjection,
@@ -103,11 +103,12 @@ class MarkdownRenderer:
     @classmethod
     def _render_graph(cls, graph: GraphResponse, sections: frozenset[SectionId]) -> str:
         lines = ["## Knowledge graph", ""]
-        nodes_by_type: dict[NodeType, list[GraphNodeRead]] = defaultdict(list)
+        nodes_by_type: dict[NodeType, list[GraphNodeResponse]] = defaultdict(list)
         skip_types = cls._graph_types_rendered_elsewhere(sections)
         for node in graph.nodes:
             if node.type in skip_types:
                 continue
+
             nodes_by_type[node.type].append(node)
 
         type_order: list[NodeType] = [
@@ -154,7 +155,7 @@ class MarkdownRenderer:
         return {node_type for section, node_type in mapping.items() if section in sections}
 
     @staticmethod
-    def _node_label(node: GraphNodeRead) -> str:
+    def _node_label(node: GraphNodeResponse) -> str:
         for key in ("text", "title", "name", "summary"):
             value = node.fields.get(key)
             if isinstance(value, str) and value.strip():
