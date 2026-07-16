@@ -1,6 +1,7 @@
 import asyncio
 import struct
 import time
+from dataclasses import dataclass
 from uuid import UUID
 
 import structlog
@@ -13,9 +14,24 @@ from app.asr.constants import (
     DROP_WARN_INTERVAL_S,
 )
 from app.asr.schemas import StreamCloseEvent, StreamOpenEvent
-from app.asr.types import StreamState
 
 logger = structlog.get_logger()
+
+
+@dataclass
+class StreamState:
+    stream_id: UUID
+    meeting_id: UUID
+    stream_idx: int
+    participant_id: UUID | None
+    audio_queue: asyncio.Queue[bytes | None]
+    seq: int = 0
+    audio_chunks_dropped: int = 0
+    last_drop_warn_at: float = 0.0
+    last_partial_text: str = ""
+    sender_task: asyncio.Task[None] | None = None
+    closed: bool = False
+    stream_offset_seconds: float = 0.0
 
 
 class WorkerSession:

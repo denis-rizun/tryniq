@@ -1,14 +1,35 @@
 import io
 import math
+from dataclasses import dataclass, field
+from functools import lru_cache
 from threading import Lock
 from typing import Any
 
 import structlog
 
-from app.asr.types import ASRSegment, WordTiming
 from app.config import config
 
 logger = structlog.get_logger()
+
+
+@dataclass
+class WordTiming:
+    word: str
+    start: float
+    end: float
+    confidence: float | None = None
+
+
+@dataclass
+class ASRSegment:
+    t_start: float
+    t_end: float
+    text: str
+    confidence: float | None = None
+    words: list[WordTiming] = field(default_factory=list)
+
+    def words_as_jsonable(self) -> list[list]:
+        return [[word.word, word.start, word.end, word.confidence] for word in self.words]
 
 
 class FasterWhisperClient:
@@ -78,11 +99,14 @@ class FasterWhisperClient:
                 chunk = self._strip_low_confidence_edges(chunk)
                 if not chunk:
                     continue
+
                 text = "".join(w.word for w in chunk).strip()
                 if not text:
                     continue
+
                 if confidence is not None and confidence < 0.35 and len(text) <= 8:
                     continue
+
                 segments.append(
                     ASRSegment(
                         t_start=chunk[0].start,
@@ -119,4 +143,6 @@ class FasterWhisperClient:
         return words[start:end]
 
 
-faster_whisper_client = FasterWhisperClient()
+@lru_cache(maxsize=1)
+def get_faster_whisper_client() -> FasterWhisperClient:
+    return FasterWhisperClient()
