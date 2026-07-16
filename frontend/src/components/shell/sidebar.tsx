@@ -1,10 +1,12 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { StatusDot } from '@/components/ui/status-dot';
-import { meeting } from '@/lib/mock';
+import { listMeetings } from '@/lib/api/meetings';
+import { isActive as isActiveMeeting } from '@/lib/api/meetings-adapters';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -16,7 +18,6 @@ interface NavItem {
 
 const PRIMARY: NavItem[] = [
   { href: '/meetings', label: 'Meetings', icon: 'meeting' },
-  { href: `/meetings/${meeting.id}/overview`, label: 'Debrief', live: true },
   { href: '/upload', label: 'Upload', icon: 'upload' },
   { href: '/people', label: 'People', icon: 'people' },
   { href: '/chat', label: 'AI assistant', icon: 'message' },
@@ -45,6 +46,15 @@ const isActive = (pathname: string, href: string): boolean => {
 
 export const Sidebar = () => {
   const pathname = usePathname();
+  const meetingsQuery = useQuery({ queryKey: ['meetings'], queryFn: listMeetings });
+  const debriefMeeting = meetingsQuery.data?.find((meeting) => isActiveMeeting(meeting.status));
+  const items = debriefMeeting
+    ? [
+        PRIMARY[0],
+        { href: `/meetings/${debriefMeeting.id}/overview`, label: 'Debrief', live: true },
+        ...PRIMARY.slice(1),
+      ]
+    : PRIMARY;
   return (
     <aside className="sidebar">
       <Link
@@ -70,7 +80,7 @@ export const Sidebar = () => {
           tryniq
         </span>
       </Link>
-      {PRIMARY.map((item) => (
+      {items.map((item) => (
         <NavRow key={item.href} item={item} active={isActive(pathname, item.href)} />
       ))}
       <div className="nav-section">PROTOTYPE</div>
