@@ -37,7 +37,7 @@ const domObserver = new DomObserver((event) => {
     for (const slot of streams.values()) {
       if (slot.participantId !== event.participantId) continue;
       slot.active = event.active;
-      slot.webSocket?.sendControl({ type: "speaker_active", active: event.active, t: event.t });
+      slot.webSocket?.sendControl({ kind: "speaker_active", active: event.active, t: event.t });
     }
     pushState();
     return;
@@ -48,7 +48,7 @@ const domObserver = new DomObserver((event) => {
     if (!matchesSsrc || !canRename) continue;
     slot.displayName = event.info.displayName;
     slot.participantId = event.info.participantId;
-    slot.webSocket?.sendControl({ type: "speaker_renamed", new_name: event.info.displayName });
+    slot.webSocket?.sendControl({ kind: "speaker_renamed", new_name: event.info.displayName });
   }
   pushState();
 });
@@ -125,7 +125,7 @@ const handleSsrcUpdate = async (streamId: string, ssrc: number): Promise<void> =
   slot.displayName = info.displayName;
   slot.participantId = info.participantId;
   if (isPlaceholderName(previousName) && !isPlaceholderName(info.displayName)) {
-    slot.webSocket?.sendControl({ type: "speaker_renamed", new_name: info.displayName });
+    slot.webSocket?.sendControl({ kind: "speaker_renamed", new_name: info.displayName });
   }
   pushState();
 };
@@ -140,7 +140,7 @@ const handlePcmFrame = async (streamId: string, pcm: ArrayBuffer, timestamp: num
 const removeStream = (streamId: string, sendDiscardReason?: string): void => {
   const slot = streams.get(streamId);
   if (!slot) return;
-  if (sendDiscardReason) slot.webSocket?.sendControl({ type: "discard", reason: sendDiscardReason });
+  if (sendDiscardReason) slot.webSocket?.sendControl({ kind: "discard", reason: sendDiscardReason });
   slot.webSocket?.close();
   streams.delete(streamId);
   pushState();
