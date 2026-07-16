@@ -1,6 +1,6 @@
 import struct
 
-from app.ingest.client import minio_client
+from app.ingest.clients.minio import minio_client
 from app.ingest.constants import BITS_PER_SAMPLE, BYTES_PER_SAMPLE, CHANNELS, SAMPLE_RATE, WAV_CONTENT_TYPE
 
 
