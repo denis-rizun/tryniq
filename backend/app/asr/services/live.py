@@ -8,6 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.websockets import WebSocket
 
 from app.asr.clients.live import LiveASRClient
+from app.asr.clients.worker_session import WorkerSession
 from app.asr.constants import EventKind
 from app.asr.schemas import (
     CLIENT_MESSAGE_ADAPTER,
@@ -15,7 +16,6 @@ from app.asr.schemas import (
     HandshakeEvent,
     PartialTranscriptEvent,
 )
-from app.asr.session import WorkerSession
 from app.core.decorators import suppress_ws_disconnect
 from app.meeting.client import redis_client
 from app.participant.service import ParticipantService

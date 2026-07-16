@@ -1,6 +1,6 @@
 """create meeting
 
-Revision ID: 04b4dc7cd7bb
+Revision ID: 0002
 Revises: 0001
 Create Date: 2026-05-01 14:55:44.648516
 

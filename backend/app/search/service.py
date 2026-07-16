@@ -8,13 +8,14 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.meeting.models import Meeting
 from app.participant.models import Participant
+from app.search.constants import ALL_TYPES
 from app.search.schemas import (
-    MeetingSearchResult,
-    PersonSearchResult,
+    MeetingSearchResponse,
+    PersonSearchResponse,
     SearchResponse,
     SearchResults,
     SearchTotals,
-    UtteranceSearchResult,
+    UtteranceSearchResponse,
 )
 from app.transcript.models import Utterance
 
@@ -23,20 +24,21 @@ class SearchService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def search(self, query: str, limit: int, types: set[str]) -> SearchResponse:
+    async def search(self, query: str, limit: int, types: str | None) -> SearchResponse:
+        requested_types = {part.strip() for part in types.split(",")} & ALL_TYPES if types else set(ALL_TYPES)
         results = SearchResults()
         totals = SearchTotals()
 
-        if "meetings" in types:
+        if "meetings" in requested_types:
             results.meetings, totals.meetings = await self._search_meetings(query, limit)
-        if "people" in types:
+        if "people" in requested_types:
             results.people, totals.people = await self._search_people(query, limit)
-        if "utterances" in types:
+        if "utterances" in requested_types:
             results.utterances, totals.utterances = await self._search_utterances(query, limit)
 
         return SearchResponse(query=query, results=results, total=totals)
 
-    async def _search_meetings(self, query: str, limit: int) -> tuple[list[MeetingSearchResult], int]:
+    async def _search_meetings(self, query: str, limit: int) -> tuple[list[MeetingSearchResponse], int]:
         tsq = self._tsquery(query)
         weighted_tsv = (
             func.setweight(
@@ -71,7 +73,7 @@ class SearchService:
 
         total = rows[0][-1]
         items = [
-            MeetingSearchResult(
+            MeetingSearchResponse(
                 id=meeting.id,
                 title=meeting.title,
                 summary=meeting.summary,
@@ -83,7 +85,7 @@ class SearchService:
         ]
         return items, total
 
-    async def _search_people(self, query: str, limit: int) -> tuple[list[PersonSearchResult], int]:
+    async def _search_people(self, query: str, limit: int) -> tuple[list[PersonSearchResponse], int]:
         tsq = self._tsquery(query)
         tsv = func.to_tsvector("simple", func.coalesce(col(Participant.name), ""))
         rank = func.max(func.ts_rank(tsv, tsq)).label("rank")
@@ -109,7 +111,7 @@ class SearchService:
 
         total = rows[0][-1]
         items = [
-            PersonSearchResult(
+            PersonSearchResponse(
                 id=UUID(any_participant_id),
                 name=name,
                 is_local_user=bool(is_local_user),
@@ -120,7 +122,7 @@ class SearchService:
         ]
         return items, total
 
-    async def _search_utterances(self, query: str, limit: int) -> tuple[list[UtteranceSearchResult], int]:
+    async def _search_utterances(self, query: str, limit: int) -> tuple[list[UtteranceSearchResponse], int]:
         tsq = self._tsquery(query)
         weighted_tsv = func.setweight(
             func.to_tsvector("english", func.coalesce(col(Utterance.text), "")),
@@ -155,7 +157,7 @@ class SearchService:
 
         total = rows[0][-1]
         items = [
-            UtteranceSearchResult(
+            UtteranceSearchResponse(
                 id=utt.id,
                 text=utt.text,
                 speaker_name=speaker_name,

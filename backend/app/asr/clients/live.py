@@ -4,7 +4,7 @@ from uuid import UUID
 import structlog
 from fastapi import WebSocket
 
-from app.asr.session import WorkerSession
+from app.asr.clients.worker_session import WorkerSession
 
 logger = structlog.get_logger()
 

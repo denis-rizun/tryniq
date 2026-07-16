@@ -1,11 +1,57 @@
-import { config } from '@/lib/config';
-import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from './client';
-import type {
-  ChatScope,
-  ChatSessionDetailResponse,
-  ChatSessionResponse,
-  ChatStreamEvent,
-} from './types';
+import { apiDelete, apiGet, apiPatch, apiPost, apiStream } from './client';
+
+export type ChatScope = 'meeting' | 'all';
+export type ChatRole = 'user' | 'assistant';
+
+export interface ChatCitation {
+  utterance_id: string;
+  meeting_id: string;
+  meeting_title: string | null;
+  meeting_started_at: string | null;
+  t_start: number;
+  t_end: number;
+  speaker: string | null;
+  text: string;
+  label: string;
+}
+
+export interface ChatMessageResponse {
+  id: string;
+  session_id: string;
+  role: ChatRole;
+  text: string;
+  citations: ChatCitation[];
+  model: string | null;
+  latency_ms: number | null;
+  created_at: string;
+}
+
+export interface ChatSessionResponse {
+  id: string;
+  title: string;
+  scope: ChatScope;
+  meeting_id: string | null;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string | null;
+  last_message_preview: string | null;
+}
+
+export interface ChatSessionDetailResponse {
+  id: string;
+  title: string;
+  scope: ChatScope;
+  meeting_id: string | null;
+  created_at: string;
+  updated_at: string;
+  messages: ChatMessageResponse[];
+}
+
+export type ChatStreamEvent =
+  | { kind: 'message_started'; user_message: ChatMessageResponse; assistant_message_id: string }
+  | { kind: 'token'; delta: string }
+  | { kind: 'message_completed'; message: ChatMessageResponse }
+  | { kind: 'error'; detail: string };
 
 export interface CreateChatSessionInput {
   scope: ChatScope;
@@ -50,50 +96,9 @@ export const streamChatMessage = async (
   text: string,
   { onEvent, signal }: StreamChatMessageHandlers,
 ): Promise<void> => {
-  const res = await fetch(`${config.apiBaseUrl}/chats/sessions/${sessionId}/messages`, {
-    method: 'POST',
-    cache: 'no-store',
-    headers: { Accept: 'text/event-stream', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
-    signal,
-  });
-  if (!res.ok || !res.body) {
-    throw new ApiError(res.status, `POST chat message failed: ${res.status}`);
-  }
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let boundary = buffer.indexOf('\n\n');
-      while (boundary !== -1) {
-        const frame = buffer.slice(0, boundary);
-        buffer = buffer.slice(boundary + 2);
-        const event = parseSseFrame(frame);
-        if (event) onEvent(event);
-        boundary = buffer.indexOf('\n\n');
-      }
-    }
-  } finally {
-    try {
-      await reader.cancel();
-    } catch {}
-  }
-};
-
-const parseSseFrame = (frame: string): ChatStreamEvent | null => {
-  const dataLines: string[] = [];
-  for (const line of frame.split('\n')) {
-    if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
-  }
-  if (dataLines.length === 0) return null;
-  try {
-    return JSON.parse(dataLines.join('\n')) as ChatStreamEvent;
-  } catch {
-    return null;
-  }
+  await apiStream<ChatStreamEvent>(
+    `/chats/sessions/${sessionId}/messages`,
+    { text },
+    { onEvent, signal },
+  );
 };

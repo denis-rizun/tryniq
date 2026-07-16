@@ -22,7 +22,7 @@ const buildInitMessage = (args: {
   displayName: string;
   isLocal: boolean;
 }): WebSocketInitMessage => ({
-  type: "init",
+  kind: "init",
   meeting_id: args.meetingId,
   stream_id: args.streamId,
   speaker: {
@@ -85,7 +85,7 @@ export const handleVoiceActivityEvent = (
   onRename: () => void,
 ): void => {
   if (event.kind === "speech_start") {
-    slot.webSocket?.sendControl({ type: "vad_speech_start", t: event.t });
+    slot.webSocket?.sendControl({ kind: "vad_speech_start", t: event.t });
     for (const prerollFrame of event.preroll) slot.webSocket?.sendPcmFrame(prerollFrame);
     rebindRemoteSpeakerName(slot, domObserver, onRename);
     return;
@@ -94,7 +94,7 @@ export const handleVoiceActivityEvent = (
     slot.webSocket?.sendPcmFrame(event.pcm);
     return;
   }
-  slot.webSocket?.sendControl({ type: "vad_speech_end", t: event.t });
+  slot.webSocket?.sendControl({ kind: "vad_speech_end", t: event.t });
 };
 
 const rebindRemoteSpeakerName = (slot: StreamSlot, domObserver: DomObserver, onRename: () => void): void => {
@@ -105,6 +105,6 @@ const rebindRemoteSpeakerName = (slot: StreamSlot, domObserver: DomObserver, onR
   if (!info.displayName || isPlaceholderName(info.displayName)) return;
   slot.displayName = info.displayName;
   slot.participantId = info.participantId;
-  slot.webSocket?.sendControl({ type: "speaker_renamed", new_name: info.displayName });
+  slot.webSocket?.sendControl({ kind: "speaker_renamed", new_name: info.displayName });
   onRename();
 };

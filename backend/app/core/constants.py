@@ -62,18 +62,18 @@ Input window:
 
 Correct ops:
 [
-  {"op":"add_node","node_type":"Topic","fields":{"title":"eu-west-1 rollback"},"temp_id":"t1","status":"provisional"},
-  {"op":"add_edge","edge_type":"DISCUSSED_IN","from":"t1","to":"meeting"},
-  {"op":"add_node","node_type":"Decision","fields":{"text":"Roll back eu-west-1 deploy"},
+  {"kind":"add_node","node_type":"Topic","fields":{"title":"eu-west-1 rollback"},"temp_id":"t1","status":"provisional"},
+  {"kind":"add_edge","edge_type":"DISCUSSED_IN","from":"t1","to":"meeting"},
+  {"kind":"add_node","node_type":"Decision","fields":{"text":"Roll back eu-west-1 deploy"},
    "temp_id":"d1","status":"confirmed"},
-  {"op":"add_edge","edge_type":"SOURCE","from":"d1","to":"u01"},
-  {"op":"add_edge","edge_type":"ABOUT_TOPIC","from":"d1","to":"t1"},
-  {"op":"add_node","node_type":"Person","fields":{"name":"Mark"},"temp_id":"p_mark","status":"provisional"},
-  {"op":"add_node","node_type":"ActionItem","fields":{"text":"Draft postmortem","due_date":"Friday"},
+  {"kind":"add_edge","edge_type":"SOURCE","from":"d1","to":"u01"},
+  {"kind":"add_edge","edge_type":"ABOUT_TOPIC","from":"d1","to":"t1"},
+  {"kind":"add_node","node_type":"Person","fields":{"name":"Mark"},"temp_id":"p_mark","status":"provisional"},
+  {"kind":"add_node","node_type":"ActionItem","fields":{"text":"Draft postmortem","due_date":"Friday"},
    "temp_id":"a1","status":"confirmed"},
-  {"op":"add_edge","edge_type":"SOURCE","from":"a1","to":"u02"},
-  {"op":"add_edge","edge_type":"ABOUT_TOPIC","from":"a1","to":"t1"},
-  {"op":"add_edge","edge_type":"ASSIGNED_TO","from":"a1","to":"p_mark"}
+  {"kind":"add_edge","edge_type":"SOURCE","from":"a1","to":"u02"},
+  {"kind":"add_edge","edge_type":"ABOUT_TOPIC","from":"a1","to":"t1"},
+  {"kind":"add_edge","edge_type":"ASSIGNED_TO","from":"a1","to":"p_mark"}
 ]
 """
 

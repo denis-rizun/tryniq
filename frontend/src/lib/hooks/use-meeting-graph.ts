@@ -3,10 +3,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
 import type { GraphEdge, GraphNode } from '@/components/meeting/graph/graph-data';
+import type { LiveEvent } from '@/lib/api/events';
 import { subscribeMeetingEvents } from '@/lib/api/events';
-import { adaptGraph } from '@/lib/api/graph-adapter';
-import { getMeetingGraph } from '@/lib/api/meetings';
-import type { GraphPatchEvent, GraphResponse, LiveEvent } from '@/lib/api/types';
+import type { GraphPatchEvent, GraphResponse } from '@/lib/api/graph';
+import { getMeetingGraph } from '@/lib/api/graph';
+import { adaptGraph } from '@/lib/api/graph-adapters';
 
 const graphKey = (meetingId: string) => ['meeting-graph', meetingId] as const;
 

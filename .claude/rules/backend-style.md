@@ -7,7 +7,7 @@ paths:
 
 ## Language & runtime
 
-- Python **3.14**. Use native PEP 604 unions (`X | Y`), PEP 585 generics (`list[int]`, `dict[str, X]`), and PEP 695 `type` aliases.
+- Python **3.13**. Use native PEP 604 unions (`X | Y`), PEP 585 generics (`list[int]`, `dict[str, X]`), and PEP 695 `type` aliases.
 - **Never** add `from __future__ import annotations`. Remove it if you find it.
 - Async-only in the API process. No blocking I/O on the request path.
 - Use new generic syntax for decorators/functions when generics are needed: `def f[T](...) -> T: ...` and `def deco[**P, R](func: Callable[P, Awaitable[R]]) -> ...`.

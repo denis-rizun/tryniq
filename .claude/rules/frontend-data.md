@@ -11,10 +11,10 @@ Binding rules for the typed backend client, data fetching/caching, client state,
 ## Backend client (`lib/api/`)
 
 - **All** network access goes through `lib/api/client.ts` (`apiGet`, `apiPost`, `apiPatch`, `apiDelete`, `ApiError`). Never call `fetch` directly from a component, page, hook, or feature module.
-- Wire-format types live in `lib/api/types.ts` and use **snake_case** field names because they map directly to backend Pydantic. Do not rename them. Suffix REST responses with `Response` (e.g. `MeetingResponse`, `UtteranceResponse`).
-- UI-facing types live in `lib/types.ts` and use **camelCase**. Conversion happens in `lib/api/adapters.ts` via `to<UIType>(...)` (e.g. `toMeeting`, `toUtterance`). **Never** consume `*Response` types in components — adapt first.
+- Wire-format types live with their route functions in `lib/api/<feature>.ts` and use **snake_case** field names because they map directly to backend Pydantic. Do not rename them. Suffix REST responses with `Response` (e.g. `MeetingResponse`, `UtteranceResponse`).
+- UI-facing types live in `lib/types.ts` and use **camelCase**. Conversion happens in `lib/api/<feature>-adapters.ts` via `to<UIType>(...)` (e.g. `toMeeting`, `toUtterance`). **Never** consume `*Response` types in components — adapt first.
 - **One file per backend feature module**: `meetings.ts`, `people.ts`, `chat.ts`, `search.ts`, `audio.ts`, `exports.ts`, `meta.ts`. Each file exports thin async functions that compose `apiGet` / `apiPost` / `apiPatch` / `apiDelete` with a typed path and return `Promise<T>`.
-- When the backend adds a route: add a typed function in the matching `lib/api/<feature>.ts` and the response type in `lib/api/types.ts` in the same change.
+- When the backend adds a route: add its typed function and response type in the matching `lib/api/<feature>.ts` in the same change.
 
 ## Data fetching & caching (TanStack Query v5)
 
@@ -32,7 +32,7 @@ Binding rules for the typed backend client, data fetching/caching, client state,
 
 ## Mock data (`lib/mock/`)
 
-- Surfaces the backend does not yet serve (the meeting graph, people directory, chat sessions, utterance samples) read from `src/lib/mock/`.
+- Only the temporary extension and topbar people imports read from `src/lib/mock/people.ts`.
 - Every consumer of mock data **must mark the call site** with a `TODO(api):` comment naming the backend module that will replace it. Example: `// TODO(api): graph projection not wired (backend/app/graph)`.
 - When the backend ships the real data: **delete** the mock module, **delete** the `TODO(api):` comment, and route through `lib/api/<feature>.ts`. Do not leave the mock as a "fallback".
 - Mock data is typed against the UI types in `lib/types.ts`, not against wire-format types.

@@ -1,15 +1,17 @@
+import { Icon } from '@/components/ui/icon';
 import { useModels } from '@/lib/hooks/use-models';
 import { STAGES } from './upload-stages';
 
 interface ProgressProps {
   stage: number;
+  fileName: string;
   onCancel: () => void;
 }
 
 const NOTES_STAGE_LABEL = 'Generating notes';
 const TRANSCRIBING_STAGE_LABEL = 'Transcribing';
 
-export const UploadProgress = ({ stage, onCancel }: ProgressProps) => {
+export const UploadProgress = ({ fileName, stage, onCancel }: ProgressProps) => {
   const { data: models } = useModels();
   const stages = STAGES.map((s) => {
     if (s.label === NOTES_STAGE_LABEL && models?.metadata.model) {
@@ -33,7 +35,7 @@ export const UploadProgress = ({ stage, onCancel }: ProgressProps) => {
         className="mono"
         style={{ fontSize: 12, color: 'var(--color-ink-secondary)', marginBottom: 14 }}
       >
-        standup-2026-05-11.m4a · 24.8 MB
+        {fileName}
       </div>
       {stages.map((s, i) => {
         const done = stage > i;
@@ -64,7 +66,7 @@ export const UploadProgress = ({ stage, onCancel }: ProgressProps) => {
               {s.label}
             </span>
             <span className="mono" style={{ fontSize: 11, color: 'var(--color-ink-secondary)' }}>
-              {active ? s.detail : done ? '✓' : ''}
+              {active ? s.detail : done ? <Icon name="check" size={12} /> : ''}
             </span>
           </div>
         );

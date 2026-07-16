@@ -6,6 +6,7 @@ from uuid import UUID
 
 import structlog
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
 from app.config import config
 from app.meeting.constants import (
@@ -124,8 +125,8 @@ class RedisClient:
             try:
                 await pubsub.unsubscribe(channel)
                 await pubsub.aclose()
-            except Exception as e:
-                logger.debug("redis: pubsub cleanup failed", channel=channel, error=str(e))
+            except RedisError as exc:
+                logger.debug("redis: pubsub cleanup failed", channel=channel, error=str(exc))
 
 
 redis_client = RedisClient()

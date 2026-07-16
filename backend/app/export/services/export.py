@@ -1,26 +1,11 @@
-import re
-from dataclasses import dataclass
-
 from app.export.constants import DEFAULT_SECTIONS, MEDIA_TYPE, SectionId
-from app.export.services.md_render import MarkdownRenderer
-from app.graph.service import GraphService
+from app.export.schemas import MarkdownExport
+from app.export.services.filename_builder import FilenameBuilder
+from app.export.services.markdown_renderer import MarkdownRenderer
+from app.graph.services.graph import GraphService
 from app.meeting.models import Meeting
-from app.metadata.services.orchestrator import MetadataService
+from app.metadata.services.metadata import MetadataService
 from app.transcript.service import TranscriptService
-
-
-@dataclass(frozen=True)
-class MarkdownExport:
-    body: str
-    filename: str
-    media_type: str
-
-
-class FilenameBuilder:
-    @classmethod
-    def build(cls, meeting: Meeting) -> str:
-        slug = re.sub(r"[^a-zA-Z0-9._-]+", "-", meeting.title.strip()).strip("-").lower()
-        return f"{slug or 'meeting'}.md"
 
 
 class ExportService:
@@ -54,5 +39,6 @@ class ExportService:
     def _parse_include(raw: str | None) -> frozenset[SectionId]:
         if raw is None:
             return DEFAULT_SECTIONS
+
         parts = (p.strip() for p in raw.split(","))
         return frozenset(SectionId(p) for p in parts if p in SectionId._value2member_map_)

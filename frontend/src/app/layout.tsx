@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { Inter, JetBrains_Mono } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { ShellOverlays } from '@/components/shell/shell-overlays';
 import { Sidebar } from '@/components/shell/sidebar';
@@ -7,6 +8,9 @@ import { Topbar } from '@/components/shell/topbar';
 import { GlobalEventsProvider } from '@/lib/api/global-events-provider';
 import { QueryProvider } from '@/lib/api/query-client';
 import './globals.css';
+
+const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
 
 export const metadata: Metadata = {
   title: 'tryniq',
@@ -17,15 +21,7 @@ export const viewport: Viewport = {
 };
 
 const RootLayout = ({ children }: { children: ReactNode }) => (
-  <html lang="en">
-    <head>
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-      <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
-        rel="stylesheet"
-      />
-    </head>
+  <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
     <body>
       <QueryProvider>
         <GlobalEventsProvider />

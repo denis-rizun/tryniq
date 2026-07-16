@@ -1,10 +1,10 @@
 from uuid import UUID
 
 from sqlalchemy import delete
-from sqlmodel import select
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.asr.types import ASRSegment
+from app.asr.clients.final import ASRSegment
 from app.config import config
 from app.meeting.models import Meeting
 from app.participant.models import Participant
@@ -54,10 +54,10 @@ class TranscriptService:
     async def _is_contained_by_existing_live(self, stream_id: UUID, t_start: float, t_end: float) -> bool:
         query = (
             select(Utterance.id)
-            .where(Utterance.stream_id == stream_id)
-            .where(Utterance.is_final == False)  # noqa: E712
-            .where(Utterance.t_start <= t_start)
-            .where(Utterance.t_end >= t_end)
+            .where(col(Utterance.stream_id) == stream_id)
+            .where(col(Utterance.is_final).is_(False))
+            .where(col(Utterance.t_start) <= t_start)
+            .where(col(Utterance.t_end) >= t_end)
             .limit(1)
         )
         result = await self.session.exec(query)
@@ -66,10 +66,10 @@ class TranscriptService:
     async def _delete_contained_live(self, stream_id: UUID, t_start: float, t_end: float) -> None:
         await self.session.exec(
             delete(Utterance)
-            .where(Utterance.stream_id == stream_id)
-            .where(Utterance.is_final == False)  # noqa: E712
-            .where(Utterance.t_start >= t_start)
-            .where(Utterance.t_end <= t_end)
+            .where(col(Utterance.stream_id) == stream_id)
+            .where(col(Utterance.is_final).is_(False))
+            .where(col(Utterance.t_start) >= t_start)
+            .where(col(Utterance.t_end) <= t_end)
         )
 
     async def replace_final_for_stream(

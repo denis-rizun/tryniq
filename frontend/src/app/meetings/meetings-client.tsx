@@ -5,7 +5,6 @@ import { useState } from 'react';
 import { MeetingsTable } from '@/components/meetings-list/meetings-table';
 import { MeetingsToolbar } from '@/components/meetings-list/meetings-toolbar';
 import { SectionLabel } from '@/components/ui/section-label';
-import { people } from '@/lib/mock';
 import { useUIStore } from '@/lib/store';
 import type { MeetingListItem } from '@/lib/types';
 
@@ -33,7 +32,7 @@ export const MeetingsClient = ({ meetings, loadError }: Props) => {
       >
         <SectionLabel>MEETINGS</SectionLabel>
       </div>
-      <MeetingsToolbar query={q} setQuery={setQ} onUpload={() => router.push('/upload')} />
+      <MeetingsToolbar query={q} onChangeQuery={setQ} onUpload={() => router.push('/upload')} />
       {loadError ? (
         <div className="empty">Could not reach the API. Is the backend running?</div>
       ) : filtered.length === 0 ? (
@@ -41,7 +40,6 @@ export const MeetingsClient = ({ meetings, loadError }: Props) => {
       ) : (
         <MeetingsTable
           meetings={filtered}
-          people={people}
           onOpen={(id) => router.push(`/meetings/${id}/overview`)}
           onExport={(id) => openExport(id)}
         />

@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import Field, TypeAdapter
@@ -19,7 +19,7 @@ class AudioFormat(BaseSchema):
 
 
 class StreamInitMessage(BaseSchema):
-    type: Literal["init"]
+    kind: Literal["init"]
     meeting_id: UUID
     stream_id: UUID
     speaker: Speaker
@@ -29,42 +29,43 @@ class StreamInitMessage(BaseSchema):
 
 
 class VoiceActivityStartedMessage(BaseSchema):
-    type: Literal["vad_speech_start"]
+    kind: Literal["vad_speech_start"]
     timestamp_seconds: float = Field(alias="t")
 
 
 class VoiceActivityEndedMessage(BaseSchema):
-    type: Literal["vad_speech_end"]
+    kind: Literal["vad_speech_end"]
     timestamp_seconds: float = Field(alias="t")
 
 
 class SpeakerActiveMessage(BaseSchema):
-    type: Literal["speaker_active"]
+    kind: Literal["speaker_active"]
     active: bool
     timestamp_seconds: float = Field(alias="t")
 
 
 class SpeakerRenamedMessage(BaseSchema):
-    type: Literal["speaker_renamed"]
+    kind: Literal["speaker_renamed"]
     new_name: str
 
 
 class StreamEndedMessage(BaseSchema):
-    type: Literal["stream_end"]
+    kind: Literal["stream_end"]
 
 
 class StreamDiscardedMessage(BaseSchema):
-    type: Literal["discard"]
+    kind: Literal["discard"]
     reason: str | None = None
 
 
-ControlMessage = (
+type ControlMessage = Annotated[
     VoiceActivityStartedMessage
     | VoiceActivityEndedMessage
     | SpeakerActiveMessage
     | SpeakerRenamedMessage
     | StreamEndedMessage
-    | StreamDiscardedMessage
-)
+    | StreamDiscardedMessage,
+    Field(discriminator="kind"),
+]
 
 CONTROL_ADAPTER: TypeAdapter[ControlMessage] = TypeAdapter(ControlMessage)

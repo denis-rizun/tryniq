@@ -12,10 +12,10 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.asr.clients.live import LiveASRClient
 from app.config import config
-from app.ingest.client import minio_client
+from app.ingest.clients.minio import minio_client
+from app.ingest.clients.wav_writer import WavWriter
 from app.ingest.constants import BYTES_PER_SAMPLE, INIT_VOICE_TIMEOUT, SAMPLE_RATE
-from app.ingest.schemas import CONTROL_ADAPTER, StreamInitMessage
-from app.ingest.wav_writer import WavWriter
+from app.ingest.schemas import CONTROL_ADAPTER, ControlMessage, StreamInitMessage
 from app.meeting.models import Meeting
 from app.participant.exceptions import ParticipantNameUnresolvedError
 from app.participant.models import Participant
@@ -165,7 +165,7 @@ class IngestService:
 
         return first_message
 
-    async def _consume_stream(  # noqa: C901
+    async def _consume_stream(
         self,
         ws: WebSocket,
         writer: WavWriter,
@@ -186,17 +186,9 @@ class IngestService:
                     break
 
                 if (audio_chunk := frame.get("bytes")) is not None:
-                    elapsed_seconds = time.monotonic() - stream_started_monotonic
-                    elapsed_bytes = int(elapsed_seconds * SAMPLE_RATE) * BYTES_PER_SAMPLE
-                    writer.pad_silence_to(offset_bytes + elapsed_bytes - len(audio_chunk))
-                    writer.append(audio_chunk)
-                    if config.asr.LIVE_ENABLED:
-                        pad_needed = elapsed_bytes - streamer_bytes_sent - len(audio_chunk)
-                        if pad_needed > 0:
-                            await self._live_asr_client.forward_audio_chunk(stream_id, b"\x00" * pad_needed)
-                            streamer_bytes_sent += pad_needed
-                        await self._live_asr_client.forward_audio_chunk(stream_id, audio_chunk)
-                        streamer_bytes_sent += len(audio_chunk)
+                    streamer_bytes_sent = await self._forward_audio(
+                        writer, stream_id, audio_chunk, offset_bytes, stream_started_monotonic, streamer_bytes_sent
+                    )
                     continue
 
                 if (raw_control_payload := frame.get("text")) is None:
@@ -219,21 +211,10 @@ class IngestService:
                     message=control_message.model_dump(),
                 )
 
-                if control_message.type == "speaker_renamed":
-                    participant = await self._handle_rename(
-                        participant=participant,
-                        meeting_id=meeting_id,
-                        stream_id=stream_id,
-                        new_name=control_message.new_name,
-                        is_local_user=is_local_user,
-                    )
-
-                elif control_message.type == "discard":
-                    discarded = True
-                    discard_reason = control_message.reason
-                    break
-
-                elif control_message.type == "stream_end":
+                participant, discarded, discard_reason, should_end = await self._handle_control_message(
+                    control_message, participant, meeting_id, stream_id, is_local_user
+                )
+                if should_end:
                     break
 
         except WebSocketDisconnect:
@@ -241,6 +222,46 @@ class IngestService:
         finally:
             await self._finalise(writer, stream_id, participant, discarded, discard_reason)
             await ws.close()
+
+    async def _forward_audio(
+        self,
+        writer: WavWriter,
+        stream_id: UUID,
+        audio_chunk: bytes,
+        offset_bytes: int,
+        stream_started_monotonic: float,
+        streamer_bytes_sent: int,
+    ) -> int:
+        elapsed_seconds = time.monotonic() - stream_started_monotonic
+        elapsed_bytes = int(elapsed_seconds * SAMPLE_RATE) * BYTES_PER_SAMPLE
+        writer.pad_silence_to(offset_bytes + elapsed_bytes - len(audio_chunk))
+        writer.append(audio_chunk)
+        if not config.asr.LIVE_ENABLED:
+            return streamer_bytes_sent
+
+        pad_needed = elapsed_bytes - streamer_bytes_sent - len(audio_chunk)
+        if pad_needed > 0:
+            await self._live_asr_client.forward_audio_chunk(stream_id, b"\x00" * pad_needed)
+            streamer_bytes_sent += pad_needed
+        await self._live_asr_client.forward_audio_chunk(stream_id, audio_chunk)
+        return streamer_bytes_sent + len(audio_chunk)
+
+    async def _handle_control_message(
+        self,
+        control_message: ControlMessage,
+        participant: Participant | None,
+        meeting_id: UUID,
+        stream_id: UUID,
+        is_local_user: bool,
+    ) -> tuple[Participant | None, bool, str | None, bool]:
+        if control_message.kind == "speaker_renamed":
+            participant = await self._handle_rename(
+                participant, meeting_id, stream_id, control_message.new_name, is_local_user
+            )
+            return participant, False, None, False
+        if control_message.kind == "discard":
+            return participant, True, control_message.reason, True
+        return participant, False, None, control_message.kind == "stream_end"
 
     async def _handle_rename(
         self,
@@ -285,8 +306,8 @@ class IngestService:
                     "live_asr: no swift worker connected; live transcript disabled for stream",
                     stream_id=str(stream_id),
                 )
-        except Exception as e:
-            logger.warning("live_asr: assign_stream failed", error=str(e), stream_id=str(stream_id))
+        except (OSError, RuntimeError) as exc:
+            logger.warning("live_asr: assign_stream failed", error=str(exc), stream_id=str(stream_id))
 
     async def _finalise(
         self,
@@ -299,8 +320,8 @@ class IngestService:
         if config.asr.LIVE_ENABLED:
             try:
                 await self._live_asr_client.close_stream(stream_id)
-            except Exception as e:
-                logger.debug("live_asr: close_stream failed", error=str(e), stream_id=str(stream_id))
+            except (OSError, RuntimeError) as exc:
+                logger.debug("live_asr: close_stream failed", error=str(exc), stream_id=str(stream_id))
         participant_id = participant.id if participant else None
         if discarded:
             writer.abort()

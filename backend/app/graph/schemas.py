@@ -19,7 +19,7 @@ NodeFields = Annotated[dict, BeforeValidator(_without_nulls)]
 
 
 class AddNodeOperation(BaseSchema):
-    op: Literal[GraphOperationKind.ADD_NODE] = GraphOperationKind.ADD_NODE
+    kind: Literal[GraphOperationKind.ADD_NODE] = GraphOperationKind.ADD_NODE
     node_type: NodeType
     fields: NodeFields
     temp_id: str
@@ -29,20 +29,20 @@ class AddNodeOperation(BaseSchema):
 class AddEdgeOperation(BaseSchema):
     model_config = {"populate_by_name": True}
 
-    op: Literal[GraphOperationKind.ADD_EDGE] = GraphOperationKind.ADD_EDGE
+    kind: Literal[GraphOperationKind.ADD_EDGE] = GraphOperationKind.ADD_EDGE
     edge_type: EdgeType
     from_ref: str = Field(alias="from")
     to_ref: str = Field(alias="to")
 
 
 class UpdateNodeOperation(BaseSchema):
-    op: Literal[GraphOperationKind.UPDATE_NODE] = GraphOperationKind.UPDATE_NODE
+    kind: Literal[GraphOperationKind.UPDATE_NODE] = GraphOperationKind.UPDATE_NODE
     id: str
     fields: NodeFields | None = None
     status: NodeStatus | None = None
 
 
-type GraphOperation = Annotated[AddNodeOperation | AddEdgeOperation | UpdateNodeOperation, Field(discriminator="op")]
+type GraphOperation = Annotated[AddNodeOperation | AddEdgeOperation | UpdateNodeOperation, Field(discriminator="kind")]
 GRAPH_OPERATION_ADAPTER: TypeAdapter[GraphOperation] = TypeAdapter(GraphOperation)
 GRAPH_OPERATIONS_ADAPTER: TypeAdapter[list[GraphOperation]] = TypeAdapter(list[GraphOperation])
 
@@ -51,7 +51,7 @@ class GraphOperationsResponse(BaseSchema):
     ops: list[GraphOperation] = Field(default_factory=list)
 
 
-class GraphNodeRead(BaseSchema):
+class GraphNodeResponse(BaseSchema):
     id: UUID
     meeting_id: UUID
     type: NodeType
@@ -60,7 +60,7 @@ class GraphNodeRead(BaseSchema):
     created_at: datetime
 
 
-class GraphEdgeRead(BaseSchema):
+class GraphEdgeResponse(BaseSchema):
     id: UUID
     meeting_id: UUID
     type: EdgeType
@@ -70,14 +70,14 @@ class GraphEdgeRead(BaseSchema):
 
 
 class GraphResponse(BaseSchema):
-    nodes: list[GraphNodeRead]
-    edges: list[GraphEdgeRead]
+    nodes: list[GraphNodeResponse]
+    edges: list[GraphEdgeResponse]
 
 
 class GraphPatchEvent(BaseSchema):
     kind: Literal[MeetingEventKind.GRAPH_PATCH] = MeetingEventKind.GRAPH_PATCH
     meeting_id: UUID
-    added_nodes: list[GraphNodeRead]
-    added_edges: list[GraphEdgeRead]
-    updated_nodes: list[GraphNodeRead]
+    added_nodes: list[GraphNodeResponse]
+    added_edges: list[GraphEdgeResponse]
+    updated_nodes: list[GraphNodeResponse]
     timestamp: datetime

@@ -31,7 +31,7 @@ export class StreamWebSocket {
     this.closedByUser = true;
     const socket = this.socket;
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    try { socket.send(JSON.stringify({ type: "stream_end" })); } catch {}
+    try { socket.send(JSON.stringify({ kind: "stream_end" })); } catch {}
     try { socket.close(1000, "client stop"); } catch {}
   };
 

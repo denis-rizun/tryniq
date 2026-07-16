@@ -1,5 +1,51 @@
 import { config } from '@/lib/config';
-import type { GlobalEvent, LiveEvent } from './types';
+import type { GraphPatchEvent } from './graph';
+
+export interface MeetingLifecycleEvent {
+  kind: 'meeting_lifecycle';
+  meeting_id: string;
+  event:
+    | 'started'
+    | 'ended'
+    | 'uploading'
+    | 'normalizing'
+    | 'diarizing'
+    | 'transcribing'
+    | 'finalizing'
+    | 'final'
+    | 'failed'
+    | 'metadata_ready';
+  timestamp: string;
+}
+
+export interface PartialTranscriptEvent {
+  kind: 'partial_transcript';
+  meeting_id: string;
+  stream_id: string;
+  participant_id: string | null;
+  text: string;
+  timestamp: string;
+}
+
+export interface TranscriptSegmentEvent {
+  kind: 'transcript_segment';
+  meeting_id: string;
+  stream_id: string;
+  participant_id: string | null;
+  text: string;
+  timestamp: string;
+  utterance_id: string;
+  t_start: number;
+  t_end: number;
+  is_final: boolean;
+}
+
+export type LiveEvent =
+  | MeetingLifecycleEvent
+  | PartialTranscriptEvent
+  | TranscriptSegmentEvent
+  | GraphPatchEvent;
+export type GlobalEvent = MeetingLifecycleEvent | { kind: 'ping' };
 
 export interface SubscribeOptions {
   onEvent: (event: LiveEvent) => void;

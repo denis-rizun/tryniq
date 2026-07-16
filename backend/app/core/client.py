@@ -4,7 +4,6 @@ from functools import lru_cache
 import structlog
 from langfuse import Langfuse
 from langfuse.openai import AsyncOpenAI as LangfuseAsyncOpenAI
-from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionChunk
 from pydantic import BaseModel, ValidationError
 
@@ -17,17 +16,12 @@ logger = structlog.get_logger()
 
 class AIClient:
     def __init__(self) -> None:
-        self.langfuse_enabled = config.ai.LANGFUSE_ENABLED
-        if self.langfuse_enabled:
-            self.langfuse = Langfuse(
-                public_key=config.ai.LANGFUSE_PUBLIC_KEY.get_secret_value(),
-                secret_key=config.ai.LANGFUSE_SECRET_KEY.get_secret_value(),
-                host=config.ai.LANGFUSE_HOST,
-            )
-            self.openai = LangfuseAsyncOpenAI(api_key=config.ai.OPENAI_API_KEY.get_secret_value())
-        else:
-            self.langfuse = None
-            self.openai = AsyncOpenAI(api_key=config.ai.OPENAI_API_KEY.get_secret_value())
+        self.langfuse = Langfuse(
+            public_key=config.ai.LANGFUSE_PUBLIC_KEY.get_secret_value(),
+            secret_key=config.ai.LANGFUSE_SECRET_KEY.get_secret_value(),
+            host=config.ai.LANGFUSE_HOST,
+        )
+        self.openai = LangfuseAsyncOpenAI(api_key=config.ai.OPENAI_API_KEY.get_secret_value())
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
@@ -48,7 +42,7 @@ class AIClient:
                 "type": "json_schema",
                 "json_schema": {"name": request.kind, "schema": request.schema, "strict": True},
             },
-            **(request.langfuse_kwargs if self.langfuse_enabled else {}),
+            **request.langfuse_kwargs,
         )
         choices = response.choices or []
         if not choices:
@@ -70,7 +64,7 @@ class AIClient:
             messages=request.messages,
             max_completion_tokens=request.max_tokens,
             stream=True,
-            **(request.langfuse_kwargs if self.langfuse_enabled else {}),
+            **request.langfuse_kwargs,
         )
         async for chunk in stream:
             yield chunk

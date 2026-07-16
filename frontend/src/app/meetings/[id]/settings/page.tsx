@@ -3,8 +3,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { use, useMemo } from 'react';
 import { MeetingSettings } from '@/components/meeting/settings/meeting-settings';
-import { toMeeting } from '@/lib/api/adapters';
 import { getTranscript, listMeetings } from '@/lib/api/meetings';
+import { toMeeting } from '@/lib/api/meetings-adapters';
 
 interface Props {
   params: Promise<{ id: string }>;

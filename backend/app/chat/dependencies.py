@@ -4,12 +4,13 @@ from uuid import UUID
 
 from fastapi import Depends
 
-from app.chat.clients.context_builder import ContextBuilder
-from app.chat.clients.prompt_builder import PromptBuilder
-from app.chat.clients.responder import ChatResponder
-from app.chat.clients.retriever import ChatRetriever
 from app.chat.models import ChatSession
-from app.chat.service import ChatService
+from app.chat.services.chat import ChatService
+from app.chat.services.context_builder import ContextBuilder
+from app.chat.services.prompt_builder import PromptBuilder
+from app.chat.services.responder import ChatResponder
+from app.chat.services.retrieval import ChatRetriever
+from app.chat.services.streaming import ChatMessageStreamer
 from app.db import SessionDep
 
 
@@ -38,12 +39,22 @@ def get_chat_retriever(session: SessionDep) -> ChatRetriever:
 ChatRetrieverDep = Annotated[ChatRetriever, Depends(get_chat_retriever)]
 
 
-def get_chat_service(
+def get_chat_streamer(
     session: SessionDep,
     retriever: ChatRetrieverDep,
     responder: ChatResponderDep,
+) -> ChatMessageStreamer:
+    return ChatMessageStreamer(session, retriever, responder)
+
+
+ChatMessageStreamerDep = Annotated[ChatMessageStreamer, Depends(get_chat_streamer)]
+
+
+def get_chat_service(
+    session: SessionDep,
+    streamer: ChatMessageStreamerDep,
 ) -> ChatService:
-    return ChatService(session, retriever, responder)
+    return ChatService(session, streamer)
 
 
 ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]

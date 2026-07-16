@@ -40,7 +40,7 @@ class ChatMessage(IDMixin, SQLModel, table=True):
     session_id: UUID = Field(foreign_key="chat_session.id", index=True)
     role: ChatRole
     text: str
-    citations: list = Field(default_factory=list, sa_column=Column(JSONB, nullable=False))
+    citations: list[dict] = Field(default_factory=list, sa_column=Column(JSONB, nullable=False))
     model: str
     latency_ms: int
     created_at: datetime = Field(

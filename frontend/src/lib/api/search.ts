@@ -48,5 +48,5 @@ export interface SearchResponse {
   total: SearchTotals;
 }
 
-export const searchAll = (q: string, limit = 8) =>
-  apiGet<SearchResponse>(`/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+export const searchAll = (query: string, limit = 8) =>
+  apiGet<SearchResponse>(`/search?query=${encodeURIComponent(query)}&limit=${limit}`);
