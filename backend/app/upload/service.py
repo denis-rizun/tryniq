@@ -6,24 +6,41 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import structlog
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import UploadFile
+from redis.exceptions import RedisError
+from sqlalchemy.exc import SQLAlchemyError
 
-from app.asr.clients.final import faster_whisper_client
-from app.asr.types import ASRSegment
+from app.asr.clients.final import ASRSegment, get_faster_whisper_client
 from app.config import config
-from app.ingest.client import minio_client
+from app.ingest.clients.minio import minio_client
 from app.meeting.client import redis_client
 from app.meeting.constants import LifecycleEvent, MeetingStatus
-from app.meeting.service import MeetingService
+from app.meeting.services.meeting import MeetingService
 from app.participant.service import ParticipantService
 from app.transcript.service import TranscriptService
-from app.upload.clients.diarization import diarization_client
+from app.upload.clients.diarization import DiarSegment, get_diarization_client
 from app.upload.clients.ffmpeg import ffmpeg_client
 from app.upload.constants import ACCEPTED_EXTENSIONS, CHUNK_BYTES, DEFAULT_SPEAKER_LABEL
-from app.upload.exceptions import UploadDurationExceededError, UploadFormatError, UploadTooLargeError
-from app.upload.types import DiarSegment
+from app.upload.exceptions import (
+    UploadDecodeError,
+    UploadDurationExceededError,
+    UploadFormatError,
+    UploadTooLargeError,
+)
 
 logger = structlog.get_logger()
+
+type UploadPipelineError = (
+    BotoCoreError
+    | ClientError
+    | OSError
+    | RedisError
+    | RuntimeError
+    | SQLAlchemyError
+    | UploadDecodeError
+    | UploadDurationExceededError
+)
 
 
 class UploadService:
@@ -59,7 +76,7 @@ class UploadService:
     async def process(self, meeting_id: UUID, source_key: str) -> None:
         try:
             await self._process(meeting_id, source_key)
-        except Exception:
+        except UploadPipelineError:
             logger.exception("upload pipeline failed", meeting_id=meeting_id)
             await self._mark_failed(meeting_id)
             raise
@@ -76,12 +93,12 @@ class UploadService:
             await ffmpeg_client.normalize_to_wav(str(src_path), str(wav_path))
 
             await self._publish(meeting_id, MeetingStatus.DIARIZING, LifecycleEvent.DIARIZING)
-            diar_segments = await diarization_client.diarize(str(wav_path))
+            diar_segments = await get_diarization_client().diarize(str(wav_path))
             cluster_count = len({d.cluster_id for d in diar_segments}) or 1
             logger.info("diarization done", meeting_id=meeting_id, clusters=cluster_count)
 
             await self._publish(meeting_id, MeetingStatus.TRANSCRIBING, LifecycleEvent.TRANSCRIBING)
-            segments = await asyncio.to_thread(faster_whisper_client.transcribe, str(wav_path))
+            segments = await asyncio.to_thread(get_faster_whisper_client().transcribe, str(wav_path))
             logger.info("transcription done", meeting_id=meeting_id, segments=len(segments))
 
             grouped = self._align_segments_to_clusters(segments, diar_segments)
@@ -115,8 +132,9 @@ class UploadService:
     async def _mark_failed(self, meeting_id: UUID) -> None:
         try:
             await self.meeting_service.set_status(meeting_id, MeetingStatus.FAILED)
-        except Exception:
+        except (RedisError, SQLAlchemyError):
             logger.exception("failed to mark meeting as failed", meeting_id=meeting_id)
+
         await redis_client.publish_meeting_lifecycle(meeting_id, LifecycleEvent.FAILED)
 
     @staticmethod
@@ -124,6 +142,7 @@ class UploadService:
         ext = Path(filename).suffix.lstrip(".").lower()
         if not ext or ext not in ACCEPTED_EXTENSIONS:
             raise UploadFormatError()
+
         return ext
 
     @staticmethod
@@ -136,11 +155,13 @@ class UploadService:
                     chunk = await file.read(CHUNK_BYTES)
                     if not chunk:
                         break
+
                     size += len(chunk)
                     if size > config.upload.MAX_BYTES:
                         raise UploadTooLargeError()
+
                     out.write(chunk)
-            except Exception:
+            except (OSError, UploadTooLargeError):
                 path.unlink(missing_ok=True)
                 raise
 
