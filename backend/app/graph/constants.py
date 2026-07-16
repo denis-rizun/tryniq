@@ -68,9 +68,9 @@ GRAPH_OPS_JSON_SCHEMA: dict = {
                     {
                         "type": "object",
                         "additionalProperties": False,
-                        "required": ["op", "node_type", "fields", "temp_id", "status"],
+                        "required": ["kind", "node_type", "fields", "temp_id", "status"],
                         "properties": {
-                            "op": {"type": "string", "enum": [GraphOperationKind.ADD_NODE]},
+                            "kind": {"type": "string", "enum": [GraphOperationKind.ADD_NODE]},
                             "node_type": {"type": "string", "enum": NODE_TYPE_VALUES},
                             "fields": NODE_FIELDS_SCHEMA,
                             "temp_id": {"type": "string"},
@@ -80,9 +80,9 @@ GRAPH_OPS_JSON_SCHEMA: dict = {
                     {
                         "type": "object",
                         "additionalProperties": False,
-                        "required": ["op", "edge_type", "from", "to"],
+                        "required": ["kind", "edge_type", "from", "to"],
                         "properties": {
-                            "op": {"type": "string", "enum": [GraphOperationKind.ADD_EDGE]},
+                            "kind": {"type": "string", "enum": [GraphOperationKind.ADD_EDGE]},
                             "edge_type": {"type": "string", "enum": EDGE_TYPE_VALUES},
                             "from": {"type": "string"},
                             "to": {"type": "string"},
@@ -91,9 +91,9 @@ GRAPH_OPS_JSON_SCHEMA: dict = {
                     {
                         "type": "object",
                         "additionalProperties": False,
-                        "required": ["op", "id", "fields", "status"],
+                        "required": ["kind", "id", "fields", "status"],
                         "properties": {
-                            "op": {"type": "string", "enum": [GraphOperationKind.UPDATE_NODE]},
+                            "kind": {"type": "string", "enum": [GraphOperationKind.UPDATE_NODE]},
                             "id": {"type": "string"},
                             "fields": {"anyOf": [NODE_FIELDS_SCHEMA, {"type": "null"}]},
                             "status": {
