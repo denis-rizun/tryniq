@@ -1,7 +1,7 @@
 from uuid import UUID
 
 import structlog
-from sqlmodel import select
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.meeting.client import redis_client
@@ -78,7 +78,7 @@ class MetadataService:
             select(Utterance)
             .where(Utterance.meeting_id == meeting_id)
             .where(Utterance.text != "")
-            .where(Utterance.is_final == True)  # noqa: E712
+            .where(col(Utterance.is_final).is_(True))
             .order_by(Utterance.t_start)
         )
         return list((await self.session.exec(query)).all())

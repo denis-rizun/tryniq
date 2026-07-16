@@ -7,7 +7,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.core.client import AIClient
 from app.graph.constants import EdgeType, NodeStatus, NodeType
 from app.graph.models import GraphEdge, GraphNode
-from app.graph.service import GraphService
+from app.graph.services.graph import GraphService
 from app.meeting.models import Meeting
 from app.metadata.constants import GENERATED_NODE_TYPES
 from app.metadata.schemas import (
