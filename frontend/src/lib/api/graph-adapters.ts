@@ -5,12 +5,12 @@ import type {
   NodeStatus,
 } from '@/components/meeting/graph/graph-data';
 import type {
-  GraphEdgeRead,
+  GraphEdgeResponse,
   GraphEdgeType,
-  GraphNodeRead,
+  GraphNodeResponse,
   GraphNodeType,
   GraphResponse,
-} from '@/lib/api/types';
+} from '@/lib/api/graph';
 
 const KIND_BY_TYPE: Record<GraphNodeType, NodeKind> = {
   Meeting: 'meeting',
@@ -23,21 +23,21 @@ const KIND_BY_TYPE: Record<GraphNodeType, NodeKind> = {
   Utterance: 'entity',
 };
 
-const labelFor = (n: GraphNodeRead): string => {
+const labelFor = (n: GraphNodeResponse): string => {
   const f = n.fields ?? {};
   const candidate = f.text ?? f.title ?? f.name ?? f.summary;
   if (typeof candidate === 'string' && candidate.trim()) return candidate;
   return `${n.type} ${n.id.slice(0, 8)}`;
 };
 
-const ownerlessFor = (n: GraphNodeRead, edges: GraphEdgeRead[]): boolean => {
+const ownerlessFor = (n: GraphNodeResponse, edges: GraphEdgeResponse[]): boolean => {
   if (n.type !== 'ActionItem' && n.type !== 'Decision') return false;
   return !edges.some(
     (e) => e.from_id === n.id && (e.type === 'ASSIGNED_TO' || e.type === 'MADE_DECISION'),
   );
 };
 
-const utteranceTime = (n: GraphNodeRead): number | null => {
+const utteranceTime = (n: GraphNodeResponse): number | null => {
   const t = n.fields?.t_start;
   return typeof t === 'number' ? t : null;
 };
