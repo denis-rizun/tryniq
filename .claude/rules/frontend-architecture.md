@@ -44,15 +44,15 @@ frontend/
         lib/
             api/                 # typed backend client (see frontend-data.md)
                 client.ts
-                types.ts
-                adapters.ts
+                <feature>.ts
+                <feature>-adapters.ts
                 query-client.tsx
                 events.ts
                 meetings.ts
                 people.ts
                 chat.ts
             hooks/               # reusable client hooks (use-*.ts)
-            mock/                # placeholder data for surfaces the backend does not serve yet
+            mock/                # temporary people data for extension/topbar only
             store.ts             # single Zustand UI store
             config.ts            # centralised env access
             types.ts             # UI-facing domain types
@@ -113,5 +113,5 @@ These are the `<feature>` slices that exist. Do not invent new ones without addi
 ## When you're not sure
 
 1. Find the closest existing example in `src/` and mirror it exactly — file layout, naming, hook shape, query keys, className taxonomy.
-2. Cross-check wire-format types against `backend/app/<feature>/schemas.py`. If the two disagree, the backend wins and you update `lib/api/types.ts` (and adapters).
+2. Cross-check wire-format types against `backend/app/<feature>/schemas.py`. If the two disagree, the backend wins and you update the matching feature API file and adapter.
 3. If still unclear, ask before inventing. Do not "improve" patterns that are already consistent across the codebase.

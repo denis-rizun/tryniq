@@ -2,7 +2,7 @@
 
 This document is the **mandatory** style and structure guide for `frontend/`. Every agent or contributor MUST read this file *before* writing or modifying any TypeScript/TSX in this repo. It encodes conventions already present in the codebase — your job is to keep the codebase coherent with what is already here, not to introduce a new flavor.
 
-If a rule below conflicts with `CLAUDE.md` (project root) or `docs/PRD.md`, those documents win on architectural questions; this document wins on code shape. Wire-format types in `src/lib/api/types.ts` are co-owned with `backend/app/*/schemas.py` — the backend Pydantic schemas are the source of truth for field names and discriminators.
+If a rule below conflicts with `CLAUDE.md` (project root) or `docs/PRD.md`, those documents win on architectural questions; this document wins on code shape. Feature-owned wire types in `src/lib/api/<feature>.ts` are co-owned with `backend/app/*/schemas.py` — the backend Pydantic schemas are the source of truth for field names and discriminators.
 
 ---
 
@@ -44,9 +44,8 @@ src/
     lib/
         api/                # typed backend client (see §5)
             client.ts       # fetch wrapper + ApiError
-            types.ts        # mirrors backend Pydantic
-            adapters.ts     # backend response → UI types
-            meetings.ts     # one file per backend feature module
+            <feature>.ts   # route functions + wire types for one backend feature
+            <feature>-adapters.ts # backend response → UI types for that feature
             events.ts       # SSE + global WS subscribers
             query-client.tsx
             global-events-provider.tsx
@@ -83,18 +82,18 @@ Rules:
 - Biome's `organizeImports` action is **on**. Don't hand-sort; let `pnpm format` / `pnpm check` do it.
 - Use `import type { ... }` for type-only imports (Biome `useImportType`).
 - One import group per source area; rely on Biome's grouping rather than manual section comments.
-- Avoid barrel files except where they already exist (`lib/mock/index.ts`). Don't introduce new `index.ts` re-export shims.
+- Avoid barrel files. Don't introduce `index.ts` re-export shims.
 
 ---
 
 ## 5. Backend client (`lib/api/`)
 
 - **All** network access goes through `lib/api/client.ts` (`apiGet`, `apiPatch`, `ApiError`). Never call `fetch` directly from a component or page.
-- Wire-format types (`MeetingResponse`, `UtteranceResponse`, `LiveEvent`, …) live in `lib/api/types.ts` and use **snake_case** field names because they map directly to backend Pydantic. Do not rename them.
-- UI-facing types live in `lib/types.ts` and use **camelCase**. Conversion happens in `lib/api/adapters.ts` via `toMeeting(...)`, `toMeetingListItem(...)`, `toUtterance(...)`. Never consume `*Response` types in components — adapt first.
+- Wire-format types (`MeetingResponse`, `UtteranceResponse`, `LiveEvent`, …) live beside their feature routes in `lib/api/<feature>.ts` and use **snake_case** field names because they map directly to backend Pydantic. Do not rename them.
+- UI-facing types live in `lib/types.ts` and use **camelCase**. Conversion happens in `lib/api/<feature>-adapters.ts` via `toMeeting(...)`, `toMeetingListItem(...)`, `toUtterance(...)`. Never consume `*Response` types in components — adapt first.
 - One file per backend feature module: `meetings.ts`, `participants.ts`, etc. Each file exports thin async functions that compose `apiGet` / `apiPatch` with a typed path and return `Promise<T>`.
 - Subscribe to live events via `subscribeMeetingEvents` (SSE) and `subscribeGlobalEvents` (WS) in `lib/api/events.ts`. Don't open `EventSource` / `WebSocket` directly elsewhere.
-- New backend routes added to the api → add a typed function in the matching `lib/api/<feature>.ts` and the response type in `lib/api/types.ts` in the same change.
+- New backend routes added to the api → add a typed function and response type in the matching `lib/api/<feature>.ts`, plus a feature adapter when UI conversion is needed.
 
 ---
 
@@ -165,7 +164,7 @@ Rules:
 
 ## 12. Mock data
 
-- Surfaces the backend does not yet serve (graph nodes/edges, decisions/action items/questions, people directory, chat) read from `src/lib/mock/`.
+- The remaining temporary people mocks are direct imports from `src/lib/mock/people.ts` in the extension and topbar only.
 - Every consumer of mock data must mark the call site with a `TODO(api):` comment naming the backend phase that will replace it (e.g. `// TODO(api): graph extraction not implemented (Phase 3)`).
 - When the backend ships the real data: delete the mock module, delete the `TODO(api):` comment, and route through `lib/api/<feature>.ts`. Don't leave the mock as a "fallback".
 
@@ -218,5 +217,5 @@ Rules:
 ## 17. When you're not sure
 
 1. Find the closest existing example in `src/` and mirror it exactly — file layout, naming, hook shape, query keys, className taxonomy. Canonical references: `src/app/meetings/[id]/overview/`, `src/lib/api/`, `src/lib/hooks/use-live-transcript.ts`, `src/components/meeting/meeting-header.tsx`.
-2. Cross-check wire-format types against `backend/app/<feature>/schemas.py`. If the two disagree, the backend wins and you update `lib/api/types.ts` (and adapters).
+2. Cross-check wire-format types against `backend/app/<feature>/schemas.py`. If the two disagree, the backend wins and you update that feature's API file and adapter.
 3. If still unclear, ask before inventing. Do not "improve" patterns that are already consistent across the codebase.

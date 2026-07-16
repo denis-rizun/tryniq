@@ -20,7 +20,7 @@ Each package has its own **CONSTITUTION.md** that is the mandatory code-shape gu
 | `streamer/`    | `streamer/CONSTITUTION.md`    | Swift 6 / strict concurrency / actors; flat `src/` layout, **150-line cap per file**, wire protocol co-owned with `backend/app/asr/schemas.py`. |
 | `frontend/`    | `frontend/CONSTITUTION.md`    | TypeScript strict / Next.js 16 App Router / React 19 / pnpm; `src/{app,components,lib}` layout, server-vs-client rules, `@/` import alias, biome formatting. |
 
-Conflict-resolution order: `CLAUDE.md` (this file) and `docs/PRD.md` win on **architectural** questions; the package's CONSTITUTION wins on **code shape**. Wire-format types are co-owned across packages — `backend/app/asr/schemas.py` is the source of truth for streamer wire fields, and `backend/app/*/schemas.py` is the source of truth for frontend `lib/api/types.ts`.
+Conflict-resolution order: `CLAUDE.md` (this file) and `docs/PRD.md` win on **architectural** questions; the package's CONSTITUTION wins on **code shape**. Wire-format types are co-owned across packages — `backend/app/asr/schemas.py` is the source of truth for streamer wire fields, and `backend/app/*/schemas.py` is the source of truth for frontend feature-owned API types.
 
 ## What this project is
 
@@ -129,11 +129,11 @@ Hard rule from the streamer constitution: one responsibility per file, **150-lin
 Frontend (`frontend/`, Next.js 16 App Router + React 19 + TS strict + pnpm; **read `frontend/CONSTITUTION.md` before editing**):
 - `src/app/` — Next.js App Router pages. Server Components by default; client islands opt in with `'use client'`. A page that splits server/client uses `page.tsx` (entry) + `<name>-client.tsx`.
 - `src/components/` — `ui/` (primitives), `shell/` (app chrome), and one folder per feature (`meeting/`, `people/`, `chat/`, …).
-- `src/lib/api/` — typed backend client: `client.ts` (fetch wrapper + `ApiError`), `meetings.ts` (one file per backend feature), `events.ts` (SSE + global WS), `types.ts` (mirrors backend Pydantic, snake_case fields), `adapters.ts` (backend → UI types), `query-client.tsx` (React Query provider), `global-events-provider.tsx` (global lifecycle WS provider).
+- `src/lib/api/` — typed backend client: `client.ts` (fetch wrapper + `ApiError`), one feature file per backend module (route functions + snake_case wire types), matching `<feature>-adapters.ts` files for UI projection, `events.ts` (SSE + global WS), `query-client.tsx` (React Query provider), and `global-events-provider.tsx` (global lifecycle WS provider).
 - `src/lib/config.ts` — centralised env access (`config.apiBaseUrl`). Any new `NEXT_PUBLIC_*` goes here, not `process.env` directly.
 - `src/lib/hooks/use-live-transcript.ts` — SSE-driven live transcript state.
 - `src/lib/store.ts` (Zustand UI store), `src/lib/types.ts` (UI domain types), `src/lib/format.ts`, `src/lib/utils.ts`.
-- `src/lib/mock/` — placeholder data for surfaces the backend does not yet serve (graph, decisions, people directory, chat). Flagged with `TODO(api):` at call sites.
+- `src/lib/mock/people.ts` — temporary extension/topbar people data only, with `TODO(api):` at each call site.
 
 Hard rules from the frontend constitution: path alias `@/*` → `src/*` (never relative `../../`), no `any`, soft cap 200 lines/file, kebab-case filenames, no new top-level folders under `src/`.
 
