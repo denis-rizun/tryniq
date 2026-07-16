@@ -94,7 +94,6 @@ async def delete_session(session: ChatSessionDep, service: ChatServiceDep) -> No
     description="Send a user message and stream the assistant response over SSE.",
     responses={
         404: {"model": ErrorResponse, "description": "Session not found"},
-        400: {"model": ErrorResponse, "description": "Empty message"},
         409: {"model": ErrorResponse, "description": "Meeting not finalized"},
     },
 )

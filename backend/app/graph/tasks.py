@@ -5,9 +5,9 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db import async_session
-from app.graph.clients.extractor import get_extractor
+from app.graph.client import get_extractor
+from app.graph.dependencies import build_graph_service
 from app.graph.exceptions import InvalidGraphOperationError, UngroundedExtractionError, UnknownUtteranceRefError
-from app.graph.service import GraphService
 from app.meeting.client import redis_client
 from app.tasks import broker
 from app.transcript.models import Utterance
@@ -19,7 +19,7 @@ logger = structlog.get_logger()
 async def build_graph(meeting_id: str, window_start: float | None, window_end: float | None) -> None:
     mid = UUID(meeting_id)
     async with async_session() as session:
-        service = GraphService(session)
+        service = build_graph_service(session)
         utterances = await _load_window(session, mid, window_start, window_end)
         if not utterances:
             logger.info("No utterances in window, skipping", meeting_id=meeting_id)
@@ -47,11 +47,6 @@ async def build_graph(meeting_id: str, window_start: float | None, window_end: f
             added_edges=len(patch.added_edges),
             updated_nodes=len(patch.updated_nodes),
         )
-
-
-@broker.task(retry_on_error=True, max_retries=1)
-async def aggregate_window(meeting_id: str) -> None:
-    logger.debug("aggregate_window scaffolded, no-op", meeting_id=meeting_id)
 
 
 async def _load_window(

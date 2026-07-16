@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { LiveEvent } from '@/lib/api/events';
 import { subscribeMeetingEvents } from '@/lib/api/events';
-import type { LiveEvent } from '@/lib/api/types';
 import { formatTimestamp } from '@/lib/format';
 import type { Meeting, Utterance } from '@/lib/types';
 

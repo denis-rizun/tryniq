@@ -101,7 +101,8 @@ export const MeetingSettings = ({ meeting }: { meeting: Meeting }) => {
         <div style={{ fontSize: 13, color: 'var(--color-ink-secondary)', marginBottom: 12 }}>
           This permanently removes the recording, transcript, and derived notes.
         </div>
-        <button type="button" className="btn btn-danger btn-sm">
+        {/* TODO(api): meeting deletion is not available yet. */}
+        <button type="button" className="btn btn-danger btn-sm" disabled>
           Delete meeting
         </button>
       </div>

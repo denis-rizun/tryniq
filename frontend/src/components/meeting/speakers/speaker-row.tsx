@@ -32,7 +32,13 @@ export const SpeakerRow = ({ speaker, expanded, onToggle }: SpeakerRowProps) => 
         color: speaker.recognized ? 'var(--color-decision)' : 'var(--color-ink-tertiary)',
       }}
     >
-      {speaker.recognized ? '✓ recognized from past meetings' : 'new voice'}
+      {speaker.recognized ? (
+        <>
+          <Icon name="check" size={12} /> recognized from past meetings
+        </>
+      ) : (
+        'new voice'
+      )}
     </div>
     <Icon
       name={expanded ? 'chevron-down' : 'chevron-right'}

@@ -13,7 +13,7 @@ from app.core.exceptions import register_exception_handler
 from app.db import dispose_engine
 from app.export.router import router as export_router
 from app.graph.router import router as graph_router
-from app.ingest.client import minio_client
+from app.ingest.clients.minio import minio_client
 from app.ingest.router import router as ingest_router
 from app.logger import configure_logging
 from app.meeting.client import redis_client

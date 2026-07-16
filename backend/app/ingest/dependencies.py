@@ -5,14 +5,7 @@ from fastapi import Depends
 from app.asr.dependencies import LiveASRClientDep
 from app.db import SessionDep
 from app.ingest.service import IngestService
-from app.participant.service import ParticipantService
-
-
-def get_participant_service(session: SessionDep) -> ParticipantService:
-    return ParticipantService(session)
-
-
-ParticipantServiceDep = Annotated[ParticipantService, Depends(get_participant_service)]
+from app.participant.dependencies import ParticipantServiceDep
 
 
 def get_ingest_service(

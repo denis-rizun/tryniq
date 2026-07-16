@@ -18,5 +18,5 @@ class Utterance(IDMixin, TimestampMixin, SQLModel, table=True):
     text: str
     confidence: float | None = None
     model: str | None = None
-    word_timings: list | None = Field(default=None, sa_column=Column(JSONB, nullable=True))
+    word_timings: list[list[str | float | None]] | None = Field(default=None, sa_column=Column(JSONB, nullable=True))
     is_final: bool = Field(default=True)

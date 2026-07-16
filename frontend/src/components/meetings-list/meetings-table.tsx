@@ -1,16 +1,13 @@
-import { AvatarStack } from '@/components/ui/avatar';
-import { Pill } from '@/components/ui/pill';
 import { StatusDot } from '@/components/ui/status-dot';
-import type { MeetingListItem, PeopleMap } from '@/lib/types';
+import type { MeetingListItem } from '@/lib/types';
 
 interface MeetingsTableProps {
   meetings: MeetingListItem[];
-  people: PeopleMap;
   onOpen: (id: string) => void;
   onExport: (id: string) => void;
 }
 
-export const MeetingsTable = ({ meetings, people, onOpen, onExport }: MeetingsTableProps) => (
+export const MeetingsTable = ({ meetings, onOpen, onExport }: MeetingsTableProps) => (
   <table className="meetings-table">
     <thead>
       <tr>
@@ -43,26 +40,14 @@ export const MeetingsTable = ({ meetings, people, onOpen, onExport }: MeetingsTa
             {m.duration || m.durationLive || '—'}
           </td>
           <td>
-            {m.participants.length > 0 ? (
-              <AvatarStack people={m.participants.map((pid) => people[pid])} max={4} />
-            ) : (
-              <span className="mono" style={{ fontSize: 12 }}>
-                {m.participantsCount}
-              </span>
-            )}
+            <span className="mono" style={{ fontSize: 12 }}>
+              {m.participantsCount}
+            </span>
           </td>
           <td>
-            {m.topPills.length > 0 ? (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {m.topPills.map((t) => (
-                  <Pill key={t}>{t}</Pill>
-                ))}
-              </div>
-            ) : (
-              <span className="mono" style={{ fontSize: 12 }}>
-                {m.topicsCount}
-              </span>
-            )}
+            <span className="mono" style={{ fontSize: 12 }}>
+              {m.topicsCount}
+            </span>
           </td>
           <td className="mono" style={{ fontSize: 12 }}>
             {m.decCount}

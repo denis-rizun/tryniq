@@ -18,7 +18,7 @@ export interface AudioFormat {
 }
 
 export interface WebSocketInitMessage {
-  type: "init";
+  kind: "init";
   meeting_id: string;
   stream_id: string;
   speaker: Speaker;
@@ -28,12 +28,12 @@ export interface WebSocketInitMessage {
 }
 
 export type WebSocketControlMessage =
-  | { type: "vad_speech_start"; t: number }
-  | { type: "vad_speech_end"; t: number }
-  | { type: "speaker_active"; active: boolean; t: number }
-  | { type: "speaker_renamed"; new_name: string }
-  | { type: "discard"; reason?: string }
-  | { type: "stream_end" };
+  | { kind: "vad_speech_start"; t: number }
+  | { kind: "vad_speech_end"; t: number }
+  | { kind: "speaker_active"; active: boolean; t: number }
+  | { kind: "speaker_renamed"; new_name: string }
+  | { kind: "discard"; reason?: string }
+  | { kind: "stream_end" };
 
 export type VoiceActivityEvent =
   | { kind: "speech_start"; t: number; preroll: Int16Array[] }

@@ -21,6 +21,7 @@ app/<feature>/
     __init__.py
     router.py          # FastAPI router (or routers/ package if multiple)
     service.py         # business logic; class <Feature>Service
+    tasks.py           # TaskIQ task entrypoints
     schemas.py         # Pydantic request/response models
     models.py          # SQLModel ORM tables
     dependencies.py    # FastAPI Depends wiring + *Dep aliases
@@ -30,7 +31,7 @@ app/<feature>/
     exceptions.py      # feature-specific subclasses of app.core.exceptions
 ```
 
-If a feature has multiple routers, use `routers/` package. Do **not** invent new top-level filenames without precedent.
+If a feature has multiple routers, use `routers/` package. Features with several external-client wrappers may use a `clients/` package (for example, upload and asr); do not keep both `client.py` and `clients/`. Features with several service collaborators may use a `services/` package, with the primary `<Feature>Service` in `services/<feature>.py` (for example, metadata). Keep one top-level responsibility per file. Producer-owned DTO dataclasses live with their producer, not in `constants.py`. Do **not** invent new top-level filenames without precedent.
 
 `__init__.py` files stay empty unless there is a deliberate public API to re-export.
 

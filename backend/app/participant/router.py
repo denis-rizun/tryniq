@@ -18,7 +18,7 @@ router = APIRouter(tags=["Participants"])
     responses={404: {"model": ErrorResponse, "description": "Meeting not found"}},
 )
 async def list_participants(meeting: MeetingDep, service: ParticipantServiceDep) -> list[ParticipantResponse]:
-    result = await service.list(meeting)
+    result = await service.list_participants(meeting)
     return [ParticipantResponse.model_validate(p) for p in result]
 
 

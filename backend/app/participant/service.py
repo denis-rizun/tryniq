@@ -64,12 +64,12 @@ class ParticipantService:
         logger.debug("upload participant created", id=participant.id, label=label)
         return participant
 
-    async def list(self, meeting: Meeting) -> list[Participant]:
+    async def list_participants(self, meeting: Meeting) -> list[Participant]:
         query = select(Participant).where(Participant.meeting_id == meeting.id)
         result = await self.session.exec(query)
         return list(result.all())
 
-    async def list_people(self) -> "list[PersonListItem]":
+    async def list_people(self) -> list[PersonListItem]:
         query = (
             select(
                 Participant.name,
@@ -94,7 +94,7 @@ class ParticipantService:
             for row in rows
         ]
 
-    async def list_person_utterances(self, name: str, limit: int = 6) -> "list[PersonUtteranceItem]":
+    async def list_person_utterances(self, name: str, limit: int = 6) -> list[PersonUtteranceItem]:
         query = (
             select(Utterance, Meeting.title)
             .join(Participant, Participant.id == Utterance.participant_id)

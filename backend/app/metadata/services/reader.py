@@ -6,7 +6,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.graph.constants import EdgeType, NodeType
 from app.graph.models import GraphEdge, GraphNode
-from app.graph.service import GraphService
+from app.graph.services.graph import GraphService
 from app.meeting.models import Meeting
 from app.metadata.schemas import (
     ActionItemProjection,
@@ -144,6 +144,7 @@ class MetadataReader:
         for raw_id, title in rows:
             if not isinstance(title, str) or not title.strip():
                 continue
+
             other_id = raw_id if isinstance(raw_id, UUID) else UUID(str(raw_id))
             titles = result.setdefault(other_id, [])
             if title not in titles:

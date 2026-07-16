@@ -6,7 +6,7 @@ from app.core.base_schema import BaseSchema
 from app.meeting.constants import MeetingStatus
 
 
-class MeetingSearchResult(BaseSchema):
+class MeetingSearchResponse(BaseSchema):
     id: UUID
     type: Literal["meeting"] = "meeting"
     title: str
@@ -16,7 +16,7 @@ class MeetingSearchResult(BaseSchema):
     url: str
 
 
-class PersonSearchResult(BaseSchema):
+class PersonSearchResponse(BaseSchema):
     id: UUID
     type: Literal["person"] = "person"
     name: str
@@ -25,7 +25,7 @@ class PersonSearchResult(BaseSchema):
     url: str
 
 
-class UtteranceSearchResult(BaseSchema):
+class UtteranceSearchResponse(BaseSchema):
     id: UUID
     type: Literal["utterance"] = "utterance"
     text: str
@@ -37,9 +37,9 @@ class UtteranceSearchResult(BaseSchema):
 
 
 class SearchResults(BaseSchema):
-    meetings: list[MeetingSearchResult] = []
-    people: list[PersonSearchResult] = []
-    utterances: list[UtteranceSearchResult] = []
+    meetings: list[MeetingSearchResponse] = []
+    people: list[PersonSearchResponse] = []
+    utterances: list[UtteranceSearchResponse] = []
 
 
 class SearchTotals(BaseSchema):

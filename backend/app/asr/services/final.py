@@ -3,9 +3,9 @@ from uuid import UUID
 
 import structlog
 
-from app.asr.clients.final import faster_whisper_client
-from app.ingest.client import minio_client
-from app.meeting.service import MeetingService
+from app.asr.clients.final import get_faster_whisper_client
+from app.ingest.clients.minio import minio_client
+from app.meeting.services.meeting import MeetingService
 from app.participant.service import ParticipantService
 from app.transcript.service import TranscriptService
 
@@ -31,13 +31,13 @@ class FinalASRService:
 
         participant = await self.participant_service.get_by_stream(meeting_id, stream_id)
         if participant is None:
-            logger.error("no participant row for stream", meeting_id=meeting_id, stream_id=stream_id)
+            logger.warning("no participant row for stream", meeting_id=meeting_id, stream_id=stream_id)
             return
 
         if wav_bytes is None:
             await self.transcript_service.mark_no_audio(meeting_id, participant.id, stream_id)
         else:
-            segments = await asyncio.to_thread(faster_whisper_client.transcribe, wav_bytes)
+            segments = await asyncio.to_thread(get_faster_whisper_client().transcribe, wav_bytes)
             logger.debug(
                 "transcription complete",
                 meeting_id=meeting_id,

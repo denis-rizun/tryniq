@@ -94,7 +94,7 @@ export const AIAssistantDrawer = ({
           sessions={d.sessions}
           filter={d.filter}
           setFilter={d.setFilter}
-          active={d.active}
+          active={d.active ?? undefined}
           onSelect={d.setActiveSessionId}
         />
 

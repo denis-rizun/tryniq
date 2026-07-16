@@ -66,7 +66,6 @@ class AISettings(BaseSettings):
     OPENAI_API_KEY: SecretStr = SecretStr("")
     PROVIDER: Literal["OpenAI"] = "OpenAI"
     EMBED_MODEL: str = "text-embedding-3-small"
-    LANGFUSE_ENABLED: bool = False
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
     LANGFUSE_PUBLIC_KEY: SecretStr = SecretStr("")
     LANGFUSE_SECRET_KEY: SecretStr = SecretStr("")

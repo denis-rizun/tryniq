@@ -1,10 +1,13 @@
 'use client';
 
 import { select } from 'd3-selection';
-import { type ZoomBehavior, zoom, zoomIdentity } from 'd3-zoom';
+import { type ZoomBehavior, zoom } from 'd3-zoom';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { radiusFor, type SimLink, type SimNode } from '@/lib/hooks/use-graph-simulation';
-import { colorFor, type GraphEdge, type GraphNode } from './graph-data';
+import type { SimLink, SimNode } from '@/lib/hooks/use-graph-simulation';
+import type { GraphEdge, GraphNode } from './graph-data';
+import { GraphEdgeView } from './graph-edge';
+import { GraphNodeView } from './graph-node';
+import { ResetOnFirstLoad } from './reset-on-first-load';
 
 interface GraphCanvasProps {
   nodes: GraphNode[];
@@ -17,8 +20,6 @@ interface GraphCanvasProps {
   width: number;
   height: number;
 }
-
-const trim = (s: string): string => (s.length > 26 ? `${s.slice(0, 24)}…` : s);
 
 export const GraphCanvas = ({
   nodes,
@@ -151,109 +152,42 @@ export const GraphCanvas = ({
     >
       <title>Knowledge graph</title>
       <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`}>
-        {simLinks.map((e, i) => {
-          const a = e.source as SimNode;
-          const b = e.target as SimNode;
-          if (!a || !b || a.x == null || b.x == null) return null;
-          const focused = isEdgeFocused(e);
-          const opacity = dimAll ? (focused ? 0.55 : 0.05) : 0.22;
-          return (
-            <line
-              key={`${e.raw.from}-${e.raw.to}-${i}`}
-              x1={a.x}
-              y1={a.y ?? 0}
-              x2={b.x}
-              y2={b.y ?? 0}
-              stroke={e.raw.plum ? 'var(--color-entity)' : 'var(--color-ink)'}
-              strokeOpacity={opacity}
-              strokeWidth={focused ? 1.4 : 1}
-              strokeDasharray={e.raw.dashed ? '4 3' : ''}
-              style={{ transition: 'stroke-opacity 200ms ease-out, stroke-width 200ms ease-out' }}
-            />
-          );
-        })}
+        {simLinks.map((edge, index) => (
+          <GraphEdgeView
+            key={`${edge.raw.from}-${edge.raw.to}-${index}`}
+            edge={edge}
+            index={index}
+            focused={isEdgeFocused(edge)}
+            dimmed={dimAll}
+          />
+        ))}
         {simNodes.map((n) => {
           const focused = isFocused(n.id);
-          const r = radiusFor(n.kind);
-          const fill = colorFor(n.kind);
-          const isProvisional = n.status === 'provisional';
-          const isSelected = selected?.id === n.id;
-          const opacity = dimAll ? (focused ? 1 : 0.18) : 1;
           const age = now - (appearedAt.get(n.id) ?? now);
           const enter = Math.min(1, age / 600);
-
           return (
-            <g
+            <GraphNodeView
               key={n.id}
-              className="node"
-              transform={`translate(${n.x ?? 0},${n.y ?? 0})`}
+              node={n}
+              selected={selected}
+              focused={!dimAll || focused}
+              dragging={draggingId === n.id}
+              enter={enter}
+              showLabel={focused || transform.k > 0.7 || selected?.id === n.id}
               onMouseEnter={() => setHoveredId(n.id)}
               onMouseLeave={() => setHoveredId(null)}
               onPointerDown={(e) => onNodePointerDown(e, n)}
               onPointerMove={onNodePointerMove}
               onPointerUp={(e) => onNodePointerUp(e, n)}
-              onClick={(e) => {
+              onSelect={(e) => {
                 e.stopPropagation();
                 if (draggingIdRef.current === null) onSelect(n);
               }}
-              style={{
-                cursor: draggingId === n.id ? 'grabbing' : 'pointer',
-                opacity: opacity * enter,
-              }}
-            >
-              {isSelected && (
-                <circle
-                  r={r + 6}
-                  fill="none"
-                  stroke="var(--color-accent-500)"
-                  strokeWidth={1.5}
-                  opacity={0.7}
-                />
-              )}
-              <circle
-                r={r * (0.4 + 0.6 * enter)}
-                fill={fill}
-                stroke={n.ownerless ? 'var(--color-action)' : '#FFFFFF'}
-                strokeWidth={n.ownerless ? 1.5 : 1.2}
-                strokeDasharray={isProvisional ? '3 2' : ''}
-                opacity={n.status === 'superseded' ? 0.45 : 1}
-                style={{ transition: 'r 250ms ease-out' }}
-              />
-              {(focused || transform.k > 0.7 || isSelected) && (
-                <text
-                  y={r + 12}
-                  textAnchor="middle"
-                  fontSize={11}
-                  fill="var(--color-ink)"
-                  fontFamily="var(--font-sans)"
-                  style={{ pointerEvents: 'none', opacity: enter }}
-                >
-                  {trim(n.label)}
-                </text>
-              )}
-            </g>
+            />
           );
         })}
       </g>
       <ResetOnFirstLoad zoomRef={zoomRef} svgRef={svgRef} />
     </svg>
   );
-};
-
-const ResetOnFirstLoad = ({
-  zoomRef,
-  svgRef,
-}: {
-  zoomRef: React.RefObject<ZoomBehavior<SVGSVGElement, unknown> | null>;
-  svgRef: React.RefObject<SVGSVGElement | null>;
-}) => {
-  const armed = useRef(false);
-  useEffect(() => {
-    if (armed.current) return;
-    armed.current = true;
-    if (svgRef.current && zoomRef.current) {
-      select(svgRef.current).call(zoomRef.current.transform, zoomIdentity);
-    }
-  }, [svgRef, zoomRef]);
-  return null;
 };

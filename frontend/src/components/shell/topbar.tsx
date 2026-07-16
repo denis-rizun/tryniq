@@ -2,7 +2,7 @@
 
 import { Avatar } from '@/components/ui/avatar';
 import { Icon } from '@/components/ui/icon';
-import { people } from '@/lib/mock';
+import { people } from '@/lib/mock/people';
 import { useUIStore } from '@/lib/store';
 import { Breadcrumb } from './breadcrumb';
 
@@ -34,6 +34,7 @@ export const Topbar = () => {
           ⌘J
         </span>
       </button>
+      {/* TODO(api): authenticated participant API is not available. */}
       <Avatar person={people.anna} />
     </div>
   );

@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from app.db import async_session
-from app.meeting.service import MeetingService
+from app.meeting.services.meeting import MeetingService
 from app.participant.service import ParticipantService
 from app.tasks import broker
 from app.transcript.service import TranscriptService

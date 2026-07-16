@@ -81,14 +81,12 @@ export interface Meeting {
 export interface MeetingListItem {
   id: string;
   title: string;
-  participants: string[];
   participantsCount: number;
   state: 'live' | 'finalizing' | 'final';
   duration?: string | null;
   durationLive?: string | null;
   startedAt: string;
   relativeStart: string;
-  topPills: string[];
   topicsCount: number;
   decCount: number;
   qCount: number;

@@ -1,18 +1,14 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Scope } from '@/components/chat/scope-toggle';
-import { toChatMessage, toChatSessionDetail, toChatSessionList } from '@/lib/api/adapters';
-import {
-  createChatSession,
-  getChatSession,
-  listChatSessions,
-  streamChatMessage,
-} from '@/lib/api/chat';
-import type { ChatScope } from '@/lib/api/types';
+import type { ChatScope } from '@/lib/api/chat';
+import { createChatSession, getChatSession, listChatSessions } from '@/lib/api/chat';
+import { toChatSessionDetail, toChatSessionList } from '@/lib/api/chat-adapters';
+import { useChatStream } from '@/lib/hooks/use-chat-stream';
 import { useUIStore } from '@/lib/store';
-import type { ChatMessage, ChatSession } from '@/lib/types';
+import type { ChatSession } from '@/lib/types';
 
 type Filter = 'meeting' | 'all' | 'all-scope';
 
@@ -35,167 +31,86 @@ export const useAIDrawer = (
   const [filter, setFilter] = useState<Filter>(defaultFilter);
   const [draftScope, setDraftScope] = useState<Scope>(defaultScope);
   const [draft, setDraft] = useState('');
-  const [streamingId, setStreamingId] = useState<string | null>(null);
-  const [pendingAssistant, setPendingAssistant] = useState<ChatMessage | null>(null);
-  const [pendingUser, setPendingUser] = useState<ChatMessage | null>(null);
   const msgsRef = useRef<HTMLDivElement | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
   useEffect(() => {
     if (open) {
       setFilter(defaultFilter);
       setDraftScope(defaultScope);
     }
-  }, [open, defaultFilter, defaultScope]);
-
-  useEffect(() => () => abortRef.current?.abort(), []);
+  }, [defaultFilter, defaultScope, open]);
 
   const sessionsQuery = useQuery({
     queryKey: sessionsKey,
     queryFn: () => listChatSessions(),
     enabled: open,
   });
-
   const sessionQuery = useQuery({
     queryKey: activeSessionId ? sessionKey(activeSessionId) : ['chat', 'session', 'none'],
     queryFn: () => (activeSessionId ? getChatSession(activeSessionId) : Promise.resolve(null)),
-    enabled: open && !!activeSessionId,
+    enabled: open && Boolean(activeSessionId),
   });
-
   const sessions: ChatSession[] = useMemo(
     () => (sessionsQuery.data ?? []).map(toChatSessionList),
     [sessionsQuery.data],
   );
-
-  const activeBase: ChatSession | undefined = useMemo(() => {
+  const activeBase = useMemo(() => {
     if (sessionQuery.data) return toChatSessionDetail(sessionQuery.data);
-    return sessions.find((s) => s.id === activeSessionId);
-  }, [sessionQuery.data, sessions, activeSessionId]);
-
-  const active: ChatSession | undefined = useMemo(() => {
-    if (!activeBase) return undefined;
-    const persistedIds = new Set(
-      activeBase.messages.map((m) => m.id).filter((id): id is string => !!id),
-    );
-    const merged = [...activeBase.messages];
-    if (pendingUser && !(pendingUser.id && persistedIds.has(pendingUser.id))) {
-      merged.push(pendingUser);
-    }
-    if (pendingAssistant && !(pendingAssistant.id && persistedIds.has(pendingAssistant.id))) {
-      merged.push(pendingAssistant);
-    }
-    return { ...activeBase, messages: merged };
-  }, [activeBase, pendingAssistant, pendingUser]);
-
-  const filteredSessions = useMemo(() => {
-    return sessions.filter((s) => {
-      if (filter === 'meeting') return s.scope === 'meeting' && s.meetingId === meetingId;
-      if (filter === 'all-scope') return s.scope === 'all';
-      return true;
-    });
-  }, [sessions, filter, meetingId]);
-
-  const messageCount = active?.messages.length ?? 0;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: messageCount and streamingId are intentional scroll triggers, not read in the effect body
-  useEffect(() => {
-    if (msgsRef.current) msgsRef.current.scrollTop = msgsRef.current.scrollHeight;
-  }, [messageCount, streamingId]);
-
-  const persistedMessageCount = activeBase?.messages.length ?? 0;
-  const scopeLocked = persistedMessageCount > 0;
+    return sessions.find((session) => session.id === activeSessionId) ?? null;
+  }, [activeSessionId, sessionQuery.data, sessions]);
   const scope: Scope = activeBase?.scope ?? draftScope;
+  const ensureSession = useCallback(async () => {
+    if (activeBase?.scope === scope) return activeBase.id;
+    const chatScope: ChatScope = scope;
+    const session = await createChatSession({
+      scope: chatScope,
+      meeting_id: chatScope === 'meeting' ? meetingId : null,
+    });
+    setActiveSessionId(session.id);
+    await queryClient.invalidateQueries({ queryKey: sessionsKey });
+    return session.id;
+  }, [activeBase, meetingId, queryClient, scope, setActiveSessionId]);
+  const {
+    active,
+    cancel,
+    send: streamMessage,
+    streaming,
+  } = useChatStream({ activeBase, ensureSession });
+  const filteredSessions = useMemo(
+    () =>
+      sessions.filter((session) => {
+        if (filter === 'meeting')
+          return session.scope === 'meeting' && session.meetingId === meetingId;
+        return filter !== 'all-scope' || session.scope === 'all';
+      }),
+    [filter, meetingId, sessions],
+  );
+  const messageCount = active?.messages.length ?? 0;
+  const scrollVersion = `${messageCount}-${streaming}`;
+  useEffect(() => {
+    void scrollVersion;
+    if (msgsRef.current) msgsRef.current.scrollTop = msgsRef.current.scrollHeight;
+  }, [scrollVersion]);
 
   const handleScopeChange = (next: Scope) => {
-    if (scopeLocked) return;
+    if (activeBase?.messages.length) return;
     setDraftScope(next);
     setActiveSessionId(null);
   };
-
-  const createMutation = useMutation({
-    mutationFn: createChatSession,
-    onSuccess: (session) => {
-      queryClient.invalidateQueries({ queryKey: sessionsKey });
-      setActiveSessionId(session.id);
-    },
-  });
-
   const newSession = async () => {
-    const meetingScope: ChatScope = scope;
-    return createMutation.mutateAsync({
-      scope: meetingScope,
-      meeting_id: meetingScope === 'meeting' ? meetingId : null,
+    const chatScope: ChatScope = scope;
+    const session = await createChatSession({
+      scope: chatScope,
+      meeting_id: chatScope === 'meeting' ? meetingId : null,
     });
+    setActiveSessionId(session.id);
+    await queryClient.invalidateQueries({ queryKey: sessionsKey });
+    return session;
   };
-
-  const ensureSession = async (): Promise<string> => {
-    if (active && active.scope === scope) return active.id;
-    const created = await newSession();
-    return created.id;
-  };
-
-  const cancel = () => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-  };
-
-  const send = async () => {
+  const send = () => {
     const text = draft.trim();
-    if (!text) return;
-    if (scope === 'meeting' && (!meetingId || !meetingFinal)) return;
-
-    let sessionId: string;
-    try {
-      sessionId = await ensureSession();
-    } catch {
-      return;
-    }
-    setActiveSessionId(sessionId);
+    if (!text || (scope === 'meeting' && (!meetingId || !meetingFinal))) return;
     setDraft('');
-
-    const tempUser: ChatMessage = { role: 'user', text, pending: true };
-    const tempAssistant: ChatMessage = { role: 'asst', text: '', pending: true };
-    setPendingUser(tempUser);
-    setPendingAssistant(tempAssistant);
-    setStreamingId(sessionId);
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      let accumulated = '';
-      await streamChatMessage(sessionId, text, {
-        signal: controller.signal,
-        onEvent: (event) => {
-          if (event.kind === 'message_started') {
-            setPendingUser({ ...toChatMessage(event.user_message), pending: false });
-          } else if (event.kind === 'token') {
-            accumulated += event.delta;
-            setPendingAssistant({ role: 'asst', text: accumulated, pending: true });
-          } else if (event.kind === 'message_completed') {
-            setPendingAssistant(toChatMessage(event.message));
-          } else if (event.kind === 'error') {
-            setPendingAssistant({
-              role: 'asst',
-              text: accumulated || 'Sorry, I could not generate a response.',
-            });
-          }
-        },
-      });
-    } catch (err) {
-      if (!(err instanceof DOMException && err.name === 'AbortError')) {
-        setPendingAssistant({
-          role: 'asst',
-          text: 'Sorry, the assistant request failed.',
-        });
-      }
-    } finally {
-      abortRef.current = null;
-      setStreamingId(null);
-      await queryClient.invalidateQueries({ queryKey: sessionKey(sessionId) });
-      await queryClient.invalidateQueries({ queryKey: sessionsKey });
-      setPendingUser(null);
-      setPendingAssistant(null);
-    }
+    void streamMessage(text);
   };
 
   return {
@@ -207,14 +122,14 @@ export const useAIDrawer = (
     handleScopeChange,
     draft,
     setDraft,
-    streamingId,
+    streamingId: streaming ? (activeSessionId ?? 'new') : null,
     msgsRef,
     newSession,
     send,
     cancel,
     setActiveSessionId,
-    canSend: scope !== 'meeting' || (!!meetingId && meetingFinal),
-    scopeLocked,
-    isLoading: sessionsQuery.isLoading || (!!activeSessionId && sessionQuery.isLoading),
+    canSend: scope !== 'meeting' || (Boolean(meetingId) && meetingFinal),
+    scopeLocked: Boolean(activeBase?.messages.length),
+    isLoading: sessionsQuery.isLoading || (Boolean(activeSessionId) && sessionQuery.isLoading),
   };
 };

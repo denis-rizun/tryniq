@@ -1,8 +1,8 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { toMeetingListItem } from '@/lib/api/adapters';
 import { listMeetings } from '@/lib/api/meetings';
+import { toMeetingListItem } from '@/lib/api/meetings-adapters';
 import { MeetingsClient } from './meetings-client';
 
 const MeetingsPage = () => {

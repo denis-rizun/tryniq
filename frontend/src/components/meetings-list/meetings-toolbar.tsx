@@ -2,11 +2,11 @@ import { Icon } from '@/components/ui/icon';
 
 interface ToolbarProps {
   query: string;
-  setQuery: (q: string) => void;
+  onChangeQuery: (query: string) => void;
   onUpload: () => void;
 }
 
-export const MeetingsToolbar = ({ query, setQuery, onUpload }: ToolbarProps) => (
+export const MeetingsToolbar = ({ query, onChangeQuery, onUpload }: ToolbarProps) => (
   <div style={{ display: 'flex', gap: 10, marginBottom: 18, alignItems: 'center' }}>
     <div style={{ position: 'relative', flex: '0 1 320px' }}>
       <input
@@ -14,7 +14,7 @@ export const MeetingsToolbar = ({ query, setQuery, onUpload }: ToolbarProps) => 
         style={{ paddingLeft: 30 }}
         placeholder="Search meetings…"
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => onChangeQuery(e.target.value)}
       />
       <span
         style={{

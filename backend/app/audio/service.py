@@ -5,7 +5,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.audio.exceptions import AudioTrackNotFoundError
 from app.audio.schemas import AudioTrackResponse
-from app.ingest.client import minio_client
+from app.ingest.clients.minio import minio_client
 from app.participant.models import Participant
 
 

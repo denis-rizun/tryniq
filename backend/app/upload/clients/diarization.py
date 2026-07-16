@@ -1,4 +1,6 @@
 import asyncio
+from dataclasses import dataclass
+from functools import lru_cache
 from threading import Lock
 from typing import Any
 
@@ -6,9 +8,15 @@ import structlog
 
 from app.config import config
 from app.upload.clients.ffmpeg import ffmpeg_client
-from app.upload.types import DiarSegment
 
 logger = structlog.get_logger()
+
+
+@dataclass(frozen=True, slots=True)
+class DiarSegment:
+    t_start: float
+    t_end: float
+    cluster_id: int
 
 
 class DiarizationClient:
@@ -65,14 +73,8 @@ class DiarizationClient:
         return [DiarSegment(t_start=0.0, t_end=duration, cluster_id=0)]
 
 
-_torch_load_patched = False
-
-
+@lru_cache(maxsize=1)
 def _allow_unsafe_torch_load() -> None:
-    global _torch_load_patched
-    if _torch_load_patched:
-        return
-
     import torch
 
     original = torch.load
@@ -83,7 +85,8 @@ def _allow_unsafe_torch_load() -> None:
         return original(*args, **kwargs)
 
     torch.load = patched  # type: ignore[assignment]
-    _torch_load_patched = True
 
 
-diarization_client = DiarizationClient()
+@lru_cache(maxsize=1)
+def get_diarization_client() -> DiarizationClient:
+    return DiarizationClient()
