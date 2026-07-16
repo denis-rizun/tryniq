@@ -3,9 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/ui/icon';
-import { isActive } from '@/lib/api/adapters';
+import type { MeetingStatus } from '@/lib/api/meetings';
 import { listMeetings, renameMeeting } from '@/lib/api/meetings';
-import type { MeetingStatus } from '@/lib/api/types';
+import { isActive } from '@/lib/api/meetings-adapters';
 import { formatDuration } from '@/lib/format';
 import { useUIStore } from '@/lib/store';
 

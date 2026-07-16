@@ -2,9 +2,11 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { use, useEffect, useMemo } from 'react';
-import { applyMeetingMetadata, toMeeting } from '@/lib/api/adapters';
 import { subscribeMeetingEvents } from '@/lib/api/events';
-import { getMeetingMetadata, getTranscript, listMeetings } from '@/lib/api/meetings';
+import { getTranscript, listMeetings } from '@/lib/api/meetings';
+import { toMeeting } from '@/lib/api/meetings-adapters';
+import { getMeetingMetadata } from '@/lib/api/metadata';
+import { applyMeetingMetadata } from '@/lib/api/metadata-adapters';
 import { OverviewClient } from './overview-client';
 
 interface Props {
