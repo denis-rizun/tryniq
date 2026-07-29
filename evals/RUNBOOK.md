@@ -1,223 +1,100 @@
-# Runbook — what to run where, end-to-end
+# Evaluation runbook
 
-How to drive the bake-off across a MacBook M4 and a Ryzen + RTX 3060 Ti box. Read [`README.md`](./README.md) for the *what* and [`DATASETS.md`](./DATASETS.md) for dataset acquisition; this file is the *how*.
+## One-time setup
 
-## Where each model runs
-
-### MacBook M4 (16 GB unified)
-
-|   | Model                           | Family      | Why Mac                                            |
-|:--|---------------------------------|-------------|----------------------------------------------------|
-|   | `faster_whisper_large_v3_turbo` | final       | CTranslate2 int8, CPU/Metal                        |
-|   | `parakeet_tdt_0_6b_v2_offline`  | final       | MLX (Apple Silicon only)                           |
-|   | `parakeet_fluid_audio`          | live        | Swift `streamer` binary uses CoreML/ANE — Mac-only |
-|   | `moonshine_base`                | live        | ONNX, runs anywhere but light enough for Mac       |
-|   | `pyannote_3_1`                  | diarization | CPU OK                                             |
-|   | `reverb_diarization_v2`         | diarization | CPU OK (slow); GPU preferred                       |
-
-### Ryzen + RTX 3060 Ti 16 GB (Linux + CUDA 12.x)
-
-| Model                   | Family                 | Why CUDA                                  |
-|-------------------------|------------------------|-------------------------------------------|
-| `canary_qwen_2_5b`      | final                  | NeMo, ~5 GB VRAM fp16, leaderboard topper |
-| `whisper_live_large_v3` | live                   | faster-whisper backend, fp16 streaming    |
-| `diarizen`              | live (post-MVP) / diar | EEND model, GPU preferred                 |
-| `reverb_diarization_v2` | diarization            | runs on either; faster on GPU             |
-
-### Cross-platform
-
-`pyannote_3_1`, `moonshine_base`, `reverb_diarization_v2` — pick the host that's idle.
-
-`ecapa_speechbrain` is registered (`in_comparison=False`) but excluded from the comparison; don't run it for the model card.
-
----
-
-## End-to-end flow
-
-### 1. One-time host setup
-
-#### On the Mac
+Use Python 3.13 and install all metric extras:
 
 ```bash
-cd evals
-make env                       # core CLI/report env
-make env-faster-whisper
-make env-mlx
-make env-moonshine
-make env-pyannote
-make env-streamer              # WS wrapper for the Swift binary
-
-# Build & install the streamer binary on $PATH (one-time):
-cd ../streamer && swift build -c release
-ln -s "$(pwd)/.build/release/streamer" /usr/local/bin/streamer
-# OR: export TRYNIQ_STREAMER_BIN=$(pwd)/.build/release/streamer
-cd ../evals
-```
-
-#### On the Ryzen + 3060 Ti box
-
-**On Windows (recommended): use Docker.** Docker Desktop with WSL2 + a recent NVIDIA Windows driver gives GPU passthrough out of the box, and the image bakes in all three CUDA-side envs. See [`docker/README.md`](./docker/README.md) for the full Windows flow:
-
-```powershell
-cd evals\docker
-docker compose build
-docker compose run --rm evals run canary_qwen_2_5b librispeech_test_clean --limit 5
-```
-
-**On native Linux** (no Docker):
-
-```bash
-# Prereqs: NVIDIA driver + CUDA 12.x runtime, ffmpeg, libsndfile1
 cd evals
 make env
-make env-cuda                  # NeMo + WhisperLive
-make env-diarizen              # DiariZen + bundled pyannote-audio
-make env-pyannote              # for pyannote_3_1 + Reverb v2
+cp .env.example .env
 ```
 
-#### HuggingFace auth (both hosts, once)
+Configure `LANGFUSE_BASE_URL`, `LANGFUSE_PUBLIC_KEY`, and `LANGFUSE_SECRET_KEY`. Semantic
+suites also require an explicit `EVAL_JUDGE_MODEL`; there is no default. Release
+qualification rejects self-judging when the judge matches the model under test.
+
+Start the isolated application stack:
 
 ```bash
-huggingface-cli login          # writes token to ~/.cache/huggingface
+make eval-infra-up
 ```
 
-Accept the gates for:
+The stack uses database `tryniq_eval`, bucket `tryniq-eval`, object prefix `eval-runs/`,
+Redis database 15 with namespace `tryniq-eval`, and Langfuse environment `evaluation`.
+The startup guard rejects production-like values.
 
-- `pyannote/speaker-diarization-3.1` — https://huggingface.co/pyannote/speaker-diarization-3.1
-- `pyannote/speaker-diarization-community-1` — https://huggingface.co/pyannote/speaker-diarization-community-1
-- `pyannote/segmentation-3.0` — https://huggingface.co/pyannote/segmentation-3.0 *(pulled in transitively by the diarization pipeline; gating is enforced separately)*
-- `edinburghcstr/ami`
-- `BUTSpeechFIT/diarizen-wavlm-large-s80-md`
-- `Revai/reverb-diarization-v2`
+## Dataset synchronization
 
-For each link: log in with the same HF account that owns your `HF_TOKEN`, fill the per-repo form, click **Agree and access repository**, and wait for the green "You have been granted access" banner before re-running. The token also needs the **"Read access to contents of all public gated repos you can access"** permission (see https://huggingface.co/settings/tokens) — without that scope you'll keep hitting `GatedRepoError 403` even after acceptance.
-
-### 2. Prepare datasets
-
-Datasets land under `<repo>/datasets/` (gitignored). Easiest is to prepare on the Linux box (faster CPU + disk) and `rsync` the `datasets/` folder to the Mac.
+For the foundation contract:
 
 ```bash
-cd evals
-
-# Auto-download:
-uv run eval prepare librispeech_test_clean
-uv run eval prepare librispeech_test_other
-uv run eval prepare ami_subset                 # needs HF_TOKEN
-uv run eval prepare earnings21 --max-meetings 4
-
-# CHiME-6 — manual: drop the LDC release under <repo>/datasets/_chime6_raw/
-# then:
-uv run eval prepare chime6_dev
+make dataset-foundation
+export EVAL_DATASET_CHECKSUM=819ce3cda4d8411f29dcaa359095647eb2db5e700909f4d0fb1a83581450493f
 ```
 
-Copy datasets between hosts:
+Synchronization preflights an existing dataset and aborts on checksum or item-count
+mismatch. Published datasets are never edited. Corrections require a new semantic version.
+
+## Running suites
 
 ```bash
-rsync -a --partial datasets/ user@mac:/path/to/tryniq/datasets/
+make eval-smoke
+make eval-nightly
+make eval-speech-final
+make eval-speech-diarization
+make eval-release
 ```
 
-### 3. Smoke test
+Run speech targets on the host that provides the production runtime. Local and scheduled
+targets use the same suite modules as the future GitHub experiment action.
 
-Run a tiny limit on the lightest model to confirm wiring:
+Every successful target prints `dataset_run_url`. Use that URL to inspect items, linked
+traces, score reasons, failures, run-level percentiles, confidence intervals, and slices.
+No local JSON/Markdown output is authoritative.
 
-```bash
-# Mac:
-uv run eval run faster_whisper_large_v3_turbo librispeech_test_clean --limit 5
+Schedule `make eval-online-once` separately from benchmark jobs. It only accepts
+`staging` or `production`, samples at the hard-capped 5%/1% rates, redacts trace payloads
+before judging, stops at the configured monthly cost cap, and writes the DeepEval score
+to the original trace.
 
-# CUDA box:
-uv run eval run canary_qwen_2_5b librispeech_test_clean --limit 5
-```
+## Approving a baseline
 
-If both produce a `results/<run_id>/summary.json` with non-null `wer_normalized`, you're good.
+1. Run the complete immutable test dataset.
+2. Inspect failures, required slices, trace metadata, and judge reasoning in Langfuse.
+3. Obtain engineering-lead approval.
+4. Pin the immutable dataset run ID in `gates/suites.yaml`.
+5. Record the run URL in the suite documentation/model card.
 
-### 4. Full bake-off
+Until a baseline ID is pinned, release qualification fails closed.
 
-#### On the Mac
+## Exceptions
 
-```bash
-cd evals
-# Final-pass ASR (Mac-runnable models)
-uv run eval run faster_whisper_large_v3_turbo librispeech_test_clean --warm
-uv run eval run faster_whisper_large_v3_turbo librispeech_test_other --warm
-uv run eval run faster_whisper_large_v3_turbo earnings21
-uv run eval run parakeet_tdt_0_6b_v2_offline   librispeech_test_clean --warm
-uv run eval run parakeet_tdt_0_6b_v2_offline   librispeech_test_other --warm
-uv run eval run parakeet_tdt_0_6b_v2_offline   earnings21
+Add an exception to `gates/exceptions.yaml` only with:
 
-# Live-pass ASR (Mac models)
-uv run eval run parakeet_fluid_audio librispeech_test_clean --limit 50
-uv run eval run parakeet_fluid_audio earnings21              --limit 5
-uv run eval run moonshine_base       librispeech_test_clean --warm
+- one suite and metric;
+- failing slices;
+- an owner and reason;
+- the immutable Langfuse run URL;
+- an expiry date.
 
-# Diarization (Mac)
-uv run eval run pyannote_3_1 ami_subset
-uv run eval run pyannote_3_1 chime6_dev
-```
+Expired exceptions do not apply. Hard-invariant exceptions require the same review as a
+baseline change.
 
-#### On the Ryzen + 3060 Ti
+## Failure handling
 
-```bash
-cd evals
-# Final
-uv run eval run canary_qwen_2_5b                     librispeech_test_clean --warm
-uv run eval run canary_qwen_2_5b                     librispeech_test_other --warm
-uv run eval run canary_qwen_2_5b                     earnings21
-uv run eval run faster_whisper_large_v3_turbo_cuda   librispeech_test_clean --warm
-uv run eval run faster_whisper_large_v3_turbo_cuda   librispeech_test_other --warm
-uv run eval run faster_whisper_large_v3_turbo_cuda   earnings21
+Task adapters catch production-boundary failures and return a typed outcome. Unexpected
+failures remain visible, increment failure rate, and receive zero for release-gated
+quality metrics. Latency remains absent when it was not measured. Only declared hardware
+or license preconditions may skip an item.
 
-# Live
-uv run eval run whisper_live_large_v3 librispeech_test_clean --limit 50
-uv run eval run whisper_live_large_v3 earnings21              --limit 5
+## Troubleshooting
 
-# Diarization
-uv run eval run diarizen              ami_subset
-uv run eval run diarizen              chime6_dev
-uv run eval run reverb_diarization_v2 ami_subset
-uv run eval run reverb_diarization_v2 chime6_dev
-```
+- Safety guard failure: compare `.env` with `.env.example`; do not weaken the guard.
+- Dataset mismatch: publish a new patch/minor/major dataset name based on the change.
+- Missing judge: set `EVAL_JUDGE_MODEL` to an approved model distinct from the candidate.
+- Inconclusive release: increase sample size or reduce variance; do not waive by rerunning
+  until a favorable random sample appears.
+- Missing run URL: the experiment used local data instead of a Langfuse dataset.
 
-#### Or shotgun (per host)
-
-```bash
-uv run eval run-family final
-uv run eval run-family live
-uv run eval run-family diarization
-```
-
-This runs every model in the family. Models that can't run on this host will be counted in `summary.json`'s `n_failed` — that's fine; the run-family command exits non-zero so you can see what didn't run.
-
-### 5. Generate the model card
-
-After all runs land, on either host (consolidate results into one `evals/results/` directory):
-
-```bash
-# If you ran on both hosts, rsync results to one place first:
-rsync -a user@cuda-box:/path/to/tryniq/evals/results/ ./results/
-
-uv run eval report
-```
-
-This regenerates the tables in `MODEL_CARD.md` and `RESULTS.md`. Per-host results coexist — `_collect()` picks the bucket with the most samples per (model, dataset) so smoke runs don't clobber full runs.
-
----
-
-## Useful flags
-
-| Flag                                                                           | Effect                                                       |
-|--------------------------------------------------------------------------------|--------------------------------------------------------------|
-| `--limit N`                                                                    | First N samples (smoke / debugging).                         |
-| `--warm`                                                                       | Keep adapter alive across samples; fair RTF.                 |
-| `--no-warm` (default)                                                          | Fresh subprocess per sample; honest first-utterance latency. |
-| `--beam-size`, `--temperature`, `--language`, `--vad-aggressiveness`, `--pace` | Fairness knobs across all models.                            |
-| `--timeout 1800`                                                               | Bump per-sample timeout for long Earnings-21 clips.          |
-
----
-
-## Recommended operating order
-
-1. Both hosts: `make env` + family-specific envs + HF login.
-2. CUDA box: prepare all datasets (faster CPU + disk), `rsync` to Mac.
-3. Both hosts: smoke test with `--limit 5` per family.
-4. Both hosts: full runs (warm mode for ASR, default for diarization).
-5. Consolidate results, `uv run eval report`, read `MODEL_CARD.md`.
+Stop the isolated stack with `make eval-infra-down`.

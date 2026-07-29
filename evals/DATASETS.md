@@ -1,95 +1,59 @@
-# Datasets
+# Dataset governance and licenses
 
-All datasets land under `<repo>/datasets/` by default (override via `TRYNIQ_EVALS_CACHE`). The directory is in the project `.gitignore` — never commit audio. Total disk on a full prepare is well under 50 GB; subsetting flags are documented per dataset below.
+Langfuse dataset names are immutable:
 
-## Registry
-
-| Dataset                  | Style                                    | Speakers | Hours used          | License            | Acquisition                                                                                          |
-|--------------------------|------------------------------------------|----------|---------------------|--------------------|------------------------------------------------------------------------------------------------------|
-| `librispeech_test_clean` | Read audiobooks (clean)                  | single   | ~5.4 h              | CC-BY-4.0          | [openslr/librispeech_asr](https://huggingface.co/datasets/openslr/librispeech_asr) — `test.clean`    |
-| `librispeech_test_other` | Read audiobooks (harder, accented/noisy) | single   | ~5.1 h              | CC-BY-4.0          | same, `test.other`                                                                                   |
-| `ami_subset`             | Real meetings, multi-mic                 | 4        | ~1.5 h (3 meetings) | CC-BY-4.0 (gated)  | [edinburghcstr/ami](https://huggingface.co/datasets/edinburghcstr/ami) — picks `ES2004a/b/c`         |
-| `earnings21`             | Long-form business meetings              | varies   | ~3 h subset         | CC-BY-4.0          | [revdotcom/speech-datasets](https://github.com/revdotcom/speech-datasets) — `earnings21/`            |
-| `chime6_dev`             | Far-field overlapped meeting audio       | 4        | varies              | LDC (non-comm.)    | [CHiME-6 download](https://www.chimechallenge.org/challenges/chime6/download) — **manual**           |
-
-## Acquisition
-
-```bash
-make env
-
-uv run eval prepare librispeech_test_clean
-uv run eval prepare librispeech_test_other
-uv run eval prepare ami_subset            # gated; needs HF_TOKEN
-uv run eval prepare earnings21
-uv run eval prepare chime6_dev            # manual; see "CHiME-6 manual acquisition" below
+```text
+tryniq/<suite>/<major>.<minor>.<patch>/<split>
 ```
 
-Or just `make prepare-all`.
+Allowed splits are smoke, development, test, holdout, and adversarial. Corrections create
+a patch version, compatible additions a minor version, and contract/label-policy changes
+a major version. Meetings never cross development/test boundaries.
 
-### Hugging Face authentication
+## Envelope
 
-`ami_subset` and the `pyannote/speaker-diarization-3.1` weights are gated. Accept the model/dataset terms on Hugging Face once, then either:
+Every item has validated input, expected output, metadata, and logical attachment
+references. Required metadata includes stable item ID, source, split, license, annotation
+provenance, and reviewer information where applicable.
 
-```bash
-huggingface-cli login    # writes token to ~/.cache/huggingface/
-# or
-export HF_TOKEN=hf_xxx
-```
+Large/restricted assets remain in evaluation MinIO and are referenced as logical URIs with
+SHA-256 hashes. Local paths, signed URLs, secrets, credentials, and raw production
+identifiers are rejected.
 
-The harness reads `HF_TOKEN` from the environment and passes it through to model loaders.
+## Sources
 
-### CHiME-6 manual acquisition
+| Source | Use | License/access |
+|---|---|---|
+| LibriSpeech test clean/other | final and live ASR | CC BY 4.0 |
+| AMI corpus + full annotations | speech, graph, metadata | AMI corpus terms |
+| Earnings-21 | long-form business ASR | CC BY 4.0 |
+| CHiME-6 | noisy/overlapping speech | LDC/custom, restricted |
+| QMSum | meeting RAG and summarization | dataset terms; verify redistribution |
+| Tryniq synthetic fixtures | contracts/adversarial behavior | MIT |
 
-CHiME-6 is distributed via LDC under restrictive terms — we never auto-download it.
+Restricted licenses are stored as logical references only and can produce a declared
+license skip on a host without access.
 
-1. Register and download from <https://www.chimechallenge.org/challenges/chime6/download>.
-2. Extract the release tree under `<repo>/datasets/_chime6_raw/` (or anywhere reachable, then `export CHIME6_ROOT=/absolute/path`).
-3. Run `uv run eval prepare chime6_dev`.
+## Synchronization
 
-Expected layout (the loader walks the tree, so minor variations are OK):
+`SourceManifest` records suite/version/split, license, normalization/import policy, source
+checksum, canonical content checksum, and items file. Deterministic UUIDv5 item IDs are
+derived from immutable dataset name plus stable item ID.
 
-```
-<root>/audio/dev/SXX_*.wav
-<root>/transcriptions/dev/SXX.json
-```
+Synchronization:
 
-If `prepare` errors with `CHiME-6 dev not found`, double-check the env var or path.
+1. validates every envelope;
+2. recomputes the canonical content checksum;
+3. fetches an existing Langfuse dataset when present;
+4. aborts on checksum or item-count mismatch;
+5. otherwise creates the dataset and deterministic items exactly once.
 
-## Ground-truth manifest format
+## Review and privacy
 
-After `prepare`, every dataset is normalized to a flat manifest the runner consumes:
+Graph and RAG test labels require a second review. Judge calibration sets require at least
+50 examples independently scored by two reviewers, adjudicated disagreements, at least
+85% pass/fail agreement, and at most 5% false-pass rate for grounding/factuality.
 
-```jsonl
-{"id": "1089-134686-0000", "audio": "/abs/path/to/clip.flac", "text": "HE HOPED THERE WOULD BE STEW ...", "speakers": null, "duration_s": 6.41}
-```
-
-For multi-speaker datasets, `text` is a path to an `.stm` file and `speakers` is an `.rttm` path. The runner's `read_reference()` parses STM correctly (extracts only the text column; ignores `;;` comments and `IGNORE_TIME_SEGMENT_IN_SCORING` markers).
-
-```jsonl
-{"id": "ES2004a", "audio": ".../ES2004a.wav", "text": ".../ES2004a.stm", "speakers": ".../ES2004a.rttm", "duration_s": 1632.0}
-```
-
-The runner reads `<cache>/<dataset>/manifest.jsonl` directly; if it's missing, run `prepare` first.
-
-## Subsetting
-
-For smoke runs and local iteration:
-
-```bash
-uv run eval run faster_whisper_large_v3_turbo librispeech_test_clean --limit 25
-uv run eval prepare ami_subset --max-meetings 1
-uv run eval prepare chime6_dev --max-meetings 1
-```
-
-## Why these specific datasets?
-
-- **LibriSpeech test-clean / test-other** — canonical ASR yardstick; numbers are directly comparable to published model cards.
-- **AMI subset** — meeting-shaped with overlapping speakers and ground-truth diarization labels (RTTM). Necessary for honest DER numbers.
-- **Earnings-21** — long-form, real business-call English. Closest in shape to what a tl;dv replacement actually has to handle.
-- **CHiME-6 dev** — far-field, heavy overlap, kitchen-noise meetings. The hardest realistic eval; if a diarization model holds up here it'll hold up in deployment.
-
-We deliberately don't include LibriSpeech `train-*` (overfitting risk) or CommonVoice (different normalization conventions inflate WER unfairly). VoxConverse, DIHARD-III, TEDLIUM-3 are deferred until CHiME-6 has informed an actual model decision.
-
-## License & attribution
-
-Each dataset's license is stubbed into `<cache>/<dataset>/LICENSE` after `prepare`. Don't redistribute the audio — only the WER/DER numbers and model checksums in `results/`.
+Production-derived material requires documented consent, pseudonymization/redaction,
+review, role-restricted access, and retention. Remove email addresses, phone numbers,
+tokens, URLs carrying credentials, and unnecessary personal identifiers before upload.

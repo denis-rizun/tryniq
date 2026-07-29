@@ -1,8 +1,13 @@
 # Model Card — Open Voice Notetaker challenge submission
 
+> Historical artifact. The tables below were produced by the retired speech harness and
+> remain read-only until replacement Langfuse speech baselines are approved. New published
+> numbers must link to an immutable Langfuse dataset run.
+
 > Submission for the internal challenge to build an open-source replacement for tl;dv. Demo day: **2026-05-11**. Benchmark hosts: **MacBook M4, 16 GB unified** (Mac-native models) + **Ryzen 5 3600X with RTX 3060 Ti, 16 GB VRAM** running **CUDA 12.x in Docker on Windows / WSL2** (CUDA-only models).
 
-This card is partly auto-generated. Narrative answers are written by hand; the comparison tables at the bottom are regenerated from `results/` by `uv run eval report`.
+This card is no longer generated. Narrative and tables are preserved for migration
+comparison only.
 
 ---
 
