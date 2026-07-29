@@ -1,0 +1,2 @@
+# Approved exceptions must be narrow, owned, linked to an immutable run, and expiring.
+exceptions: []

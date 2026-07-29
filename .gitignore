@@ -66,6 +66,7 @@ coverage.xml
 
 .mypy_cache/
 .ruff_cache/
+.deepeval/
 .pyre/
 .pytype/
 .dmypy.json
@@ -145,4 +146,10 @@ temp/
 
 # Eval datasets (large audio + restrictive licenses; never commit)
 datasets/
+!evals/datasets/
+evals/datasets/*
+!evals/datasets/manifests/
+!evals/datasets/manifests/**
+!evals/datasets/items/
+!evals/datasets/items/*.json
 evals/results/
