@@ -4,6 +4,8 @@ from uuid import UUID
 import structlog
 
 from app.asr.clients.final import get_faster_whisper_client
+from app.config import config
+from app.core.client import get_ai_client
 from app.ingest.clients.minio import minio_client
 from app.meeting.services.meeting import MeetingService
 from app.participant.service import ParticipantService
@@ -27,26 +29,52 @@ class FinalASRService:
         self.meeting_service = meeting_service
 
     async def run(self, meeting_id: UUID, stream_id: UUID) -> None:
-        wav_bytes = await self._load_audio(meeting_id, stream_id)
+        with get_ai_client().langfuse.start_as_current_observation(
+            name="asr.final",
+            as_type="span",
+            input={"meeting_id": str(meeting_id), "stream_id": str(stream_id)},
+            metadata={"environment": config.ENV, "feature": "final-asr"},
+        ) as observation:
+            wav_bytes = await self._load_audio(meeting_id, stream_id)
 
-        participant = await self.participant_service.get_by_stream(meeting_id, stream_id)
-        if participant is None:
-            logger.warning("no participant row for stream", meeting_id=meeting_id, stream_id=stream_id)
-            return
+            participant = await self.participant_service.get_by_stream(meeting_id, stream_id)
+            if participant is None:
+                observation.update(level="WARNING", status_message="participant not found")
+                logger.warning(
+                    "no participant row for stream",
+                    meeting_id=meeting_id,
+                    stream_id=stream_id,
+                )
+                return
 
-        if wav_bytes is None:
-            await self.transcript_service.mark_no_audio(meeting_id, participant.id, stream_id)
-        else:
-            segments = await asyncio.to_thread(get_faster_whisper_client().transcribe, wav_bytes)
-            logger.debug(
-                "transcription complete",
-                meeting_id=meeting_id,
-                stream_id=stream_id,
-                segment_count=len(segments),
-            )
-            await self.transcript_service.replace_final_for_stream(meeting_id, participant.id, stream_id, segments)
+            segment_count = 0
+            if wav_bytes is None:
+                await self.transcript_service.mark_no_audio(
+                    meeting_id,
+                    participant.id,
+                    stream_id,
+                )
+            else:
+                segments = await asyncio.to_thread(
+                    get_faster_whisper_client().transcribe,
+                    wav_bytes,
+                )
+                segment_count = len(segments)
+                logger.debug(
+                    "transcription complete",
+                    meeting_id=meeting_id,
+                    stream_id=stream_id,
+                    segment_count=segment_count,
+                )
+                await self.transcript_service.replace_final_for_stream(
+                    meeting_id,
+                    participant.id,
+                    stream_id,
+                    segments,
+                )
 
-        await self.meeting_service.promote_to_final_if_complete(meeting_id)
+            observation.update(output={"segment_count": segment_count})
+            await self.meeting_service.promote_to_final_if_complete(meeting_id)
 
     async def _load_audio(self, meeting_id: UUID, stream_id: UUID) -> bytes | None:
         key = minio_client.get_stream_object_key(meeting_id, stream_id)

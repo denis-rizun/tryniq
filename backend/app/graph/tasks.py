@@ -7,7 +7,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.db import async_session
 from app.graph.client import get_extractor
 from app.graph.dependencies import build_graph_service
-from app.graph.exceptions import InvalidGraphOperationError, UngroundedExtractionError, UnknownUtteranceRefError
+from app.graph.services.window import GraphWindowProcessor, GraphWindowStatus
 from app.meeting.client import redis_client
 from app.tasks import broker
 from app.transcript.models import Utterance
@@ -26,19 +26,17 @@ async def build_graph(meeting_id: str, window_start: float | None, window_end: f
             return
 
         prompt, short_refs = _format_window(mid, utterances)
-        extractor = get_extractor()
-        try:
-            operations = await extractor.extract(prompt)
-            if not operations:
-                logger.info("Extractor returned no operations", meeting_id=meeting_id)
-                return
-
-            patch = await service.apply_operations(mid, operations, utterances, short_refs)
-        except (UngroundedExtractionError, UnknownUtteranceRefError, InvalidGraphOperationError) as e:
-            logger.warning("Skipping window, LLM produced invalid operations", meeting_id=meeting_id, reason=str(e))
-            await session.rollback()
+        processor = GraphWindowProcessor(session, service, get_extractor())
+        result = await processor.process(mid, utterances, prompt, short_refs)
+        if result.status != GraphWindowStatus.APPLIED or result.patch is None:
+            logger.info(
+                "Graph window produced no durable patch",
+                meeting_id=meeting_id,
+                status=result.status,
+            )
             return
 
+        patch = result.patch
         await redis_client.publish_graph_patch(mid, patch.model_dump_json())
         logger.info(
             "Applied patch",

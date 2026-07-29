@@ -116,6 +116,20 @@ class MeetingService:
         return meeting
 
     async def promote_to_final_if_complete(self, meeting_id: UUID) -> bool:
+        from app.config import config
+        from app.core.client import get_ai_client
+
+        with get_ai_client().langfuse.start_as_current_observation(
+            name="meeting.finalize",
+            as_type="span",
+            input={"meeting_id": str(meeting_id)},
+            metadata={"environment": config.ENV, "feature": "meeting-finalization"},
+        ) as observation:
+            completed = await self._promote_to_final_if_complete(meeting_id)
+            observation.update(output={"completed": completed})
+            return completed
+
+    async def _promote_to_final_if_complete(self, meeting_id: UUID) -> bool:
         meeting = await self._get_finalizing(meeting_id)
         if not meeting:
             return False
