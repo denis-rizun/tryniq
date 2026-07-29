@@ -21,7 +21,7 @@ services:
     <<: *common
     logging: *default-logging
     expose:
-      - "${POSTGRES_PORT}"
+      - "5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -33,7 +33,7 @@ services:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DATABASE}" ]
       start_period: 10s
     ports:
-      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
 
   api:
     <<: [*common]
@@ -135,6 +135,25 @@ services:
       timeout: 3s
       retries: 20
 
+  minio-init:
+    image: minio/mc:latest
+    networks:
+      - tryniq-network
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      LANGFUSE_S3_BUCKET: ${LANGFUSE_S3_BUCKET:-langfuse}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        mc alias set local http://minio:9000 "$${MINIO_ACCESS_KEY}" "$${MINIO_SECRET_KEY}" &&
+        mc mb --ignore-existing "local/$${LANGFUSE_S3_BUCKET}"
+    restart: "no"
+
   langfuse-postgres-init:
     image: pgvector/pgvector:pg18
     networks:
@@ -169,7 +188,7 @@ services:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
 
   langfuse-web:
-    image: langfuse/langfuse:3
+    image: langfuse/langfuse:3@sha256:4bc041b8b47e62d06792ed863d8803ba32f612a8d4e6d539a059e5dc921345c6
     networks:
       - tryniq-network
     logging: *default-logging
@@ -180,13 +199,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     ports:
       - "3001:3000"
     environment: &langfuse-env
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/langfuse
-      DIRECT_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/langfuse
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/langfuse
+      DIRECT_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/langfuse
       SALT: ${LANGFUSE_SALT:-mysalt}
       ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY}
       NEXTAUTH_URL: http://localhost:3001
@@ -223,7 +242,7 @@ services:
       LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-changeme123}
 
   langfuse-worker:
-    image: langfuse/langfuse-worker:3
+    image: langfuse/langfuse-worker:3@sha256:3f5069e58eb614d10a403646348ff80cb8451d3d7375477706ed59223becaa83
     networks:
       - tryniq-network
     logging: *default-logging

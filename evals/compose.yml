@@ -1,0 +1,143 @@
+name: tryniq-eval
+
+x-eval-environment: &eval-environment
+  ENV: EVAL
+  POSTGRES_HOST: postgres-eval
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: tryniq_eval
+  POSTGRES_PASSWORD: tryniq-eval-only
+  POSTGRES_DATABASE: tryniq_eval
+  MINIO_ENDPOINT_URL: http://minio-eval:9000
+  MINIO_ACCESS_KEY: tryniq-eval
+  MINIO_SECRET_KEY: tryniq-eval-only
+  MINIO_BUCKET: tryniq-eval
+  EVAL_MINIO_PREFIX: eval-runs/
+  REDIS_URL: redis://redis-eval:6379/15
+  EVAL_REDIS_NAMESPACE: tryniq-eval
+  LANGFUSE_TRACING_ENVIRONMENT: evaluation
+  AI_LANGFUSE_ENVIRONMENT: evaluation
+  AI_LANGFUSE_HOST: ${AI_LANGFUSE_HOST:-http://host.docker.internal:3001}
+  AI_LANGFUSE_PUBLIC_KEY: ${AI_LANGFUSE_PUBLIC_KEY:-}
+  AI_LANGFUSE_SECRET_KEY: ${AI_LANGFUSE_SECRET_KEY:-}
+  AI_OPENAI_API_KEY: ${AI_OPENAI_API_KEY:-}
+
+services:
+  postgres-eval:
+    image: pgvector/pgvector:pg18
+    profiles: [eval]
+    environment:
+      POSTGRES_USER: tryniq_eval
+      POSTGRES_PASSWORD: tryniq-eval-only
+      POSTGRES_DB: tryniq_eval
+    ports:
+      - "55432:5432"
+    volumes:
+      - postgres-eval-data:/var/lib/postgresql/18/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tryniq_eval -d tryniq_eval"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis-eval:
+    image: redis:7-alpine
+    profiles: [eval]
+    command: ["redis-server", "--appendonly", "yes", "--databases", "16"]
+    ports:
+      - "56379:6379"
+    volumes:
+      - redis-eval-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-n", "15", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  minio-eval:
+    image: minio/minio:latest
+    profiles: [eval]
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: tryniq-eval
+      MINIO_ROOT_PASSWORD: tryniq-eval-only
+    ports:
+      - "59200:9000"
+      - "59201:9001"
+    volumes:
+      - minio-eval-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  minio-eval-init:
+    image: minio/mc:latest
+    profiles: [eval]
+    depends_on:
+      minio-eval:
+        condition: service_healthy
+    environment:
+      MINIO_ACCESS_KEY: tryniq-eval
+      MINIO_SECRET_KEY: tryniq-eval-only
+      MINIO_BUCKET: tryniq-eval
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        mc alias set local http://minio-eval:9000 "$${MINIO_ACCESS_KEY}" "$${MINIO_SECRET_KEY}" &&
+        mc mb --ignore-existing "local/$${MINIO_BUCKET}"
+    restart: "no"
+
+  migration-eval:
+    profiles: [eval]
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    command: ["migrate"]
+    restart: "no"
+    environment: *eval-environment
+    volumes:
+      - ../backend/alembic:/app/alembic:ro
+    depends_on:
+      postgres-eval:
+        condition: service_healthy
+
+  api-eval:
+    profiles: [eval]
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    environment: *eval-environment
+    ports:
+      - "58000:8000"
+    depends_on:
+      migration-eval:
+        condition: service_completed_successfully
+      redis-eval:
+        condition: service_healthy
+      minio-eval-init:
+        condition: service_completed_successfully
+
+  worker-eval:
+    profiles: [eval]
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    command: ["worker"]
+    environment: *eval-environment
+    depends_on:
+      migration-eval:
+        condition: service_completed_successfully
+      redis-eval:
+        condition: service_healthy
+      minio-eval-init:
+        condition: service_completed_successfully
+    volumes:
+      - eval-whisper-models:/home/appuser/.cache
+
+volumes:
+  postgres-eval-data:
+  redis-eval-data:
+  minio-eval-data:
+  eval-whisper-models:

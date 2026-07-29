@@ -1,4 +1,4 @@
-.PHONY: help streamer streamer-build ext-dev ext-build fr bc
+.PHONY: help streamer streamer-build ext-dev ext-build fr bc eval-smoke eval-nightly eval-release
 
 help:
 	@echo "Targets:"
@@ -8,6 +8,9 @@ help:
 	@echo "  ext-build       produce a production extension bundle"
 	@echo "  fr              run the frontend dev server (outside docker)"
 	@echo "  bc              docker compose up --build (backend stack only, legacy alias)"
+	@echo "  eval-smoke      run the Langfuse foundation smoke experiment"
+	@echo "  eval-nightly    run scheduled application evaluation suites"
+	@echo "  eval-release    run release qualification against approved baselines"
 
 streamer:
 	$(MAKE) -C streamer run
@@ -26,3 +29,12 @@ fr:
 
 bc:
 	$(COMPOSE) up --build -d
+
+eval-smoke:
+	$(MAKE) -C evals eval-smoke
+
+eval-nightly:
+	$(MAKE) -C evals eval-nightly
+
+eval-release:
+	$(MAKE) -C evals eval-release
