@@ -19,17 +19,34 @@ class DiarSegment:
     cluster_id: int
 
 
+@dataclass(frozen=True, slots=True)
+class DiarizationResult:
+    segments: tuple[DiarSegment, ...]
+    fallback_used: bool
+    failure: str | None = None
+
+
 class DiarizationClient:
     def __init__(self) -> None:
         self._pipeline: Any | None = None
         self._lock = Lock()
 
     async def diarize(self, wav_path: str) -> list[DiarSegment]:
+        result = await self.diarize_with_status(wav_path)
+        return list(result.segments)
+
+    async def diarize_with_status(self, wav_path: str) -> DiarizationResult:
         try:
-            return await asyncio.to_thread(self._run, wav_path)
-        except (ImportError, RuntimeError):
-            logger.warning("diarizen unavailable, using single cluster")
-            return await self._run_fallback(wav_path)
+            segments = await asyncio.to_thread(self._run, wav_path)
+            return DiarizationResult(segments=tuple(segments), fallback_used=False)
+        except (ImportError, RuntimeError) as exc:
+            logger.warning("diarizen unavailable, using single cluster", reason=str(exc))
+            segments = await self._run_fallback(wav_path)
+            return DiarizationResult(
+                segments=tuple(segments),
+                fallback_used=True,
+                failure=f"{type(exc).__name__}: {exc}",
+            )
 
     def _run(self, wav_path: str) -> list[DiarSegment]:
         pipeline = self._ensure_pipeline()

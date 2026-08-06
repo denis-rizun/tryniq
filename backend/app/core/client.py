@@ -20,6 +20,7 @@ class AIClient:
             public_key=config.ai.LANGFUSE_PUBLIC_KEY.get_secret_value(),
             secret_key=config.ai.LANGFUSE_SECRET_KEY.get_secret_value(),
             host=config.ai.LANGFUSE_HOST,
+            environment=config.ai.LANGFUSE_ENVIRONMENT,
         )
         self.openai = LangfuseAsyncOpenAI(api_key=config.ai.OPENAI_API_KEY.get_secret_value())
 
@@ -27,8 +28,17 @@ class AIClient:
         if not texts:
             return []
 
-        response = await self.openai.embeddings.create(model=config.ai.EMBED_MODEL, input=texts)
-        return [item.embedding for item in response.data]
+        with self.langfuse.start_as_current_observation(
+            name="embedding.generate",
+            as_type="embedding",
+            input={"text_count": len(texts)},
+            model=config.ai.EMBED_MODEL,
+            metadata={"environment": config.ENV, "feature": "embedding"},
+        ) as observation:
+            response = await self.openai.embeddings.create(model=config.ai.EMBED_MODEL, input=texts)
+            embeddings = [item.embedding for item in response.data]
+            observation.update(output={"embedding_count": len(embeddings)})
+            return embeddings
 
     async def complete_structured[T: BaseModel](self, request: StructuredRequest) -> T:
         response = await self.openai.chat.completions.create(

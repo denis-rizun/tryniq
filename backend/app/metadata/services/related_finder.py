@@ -4,6 +4,8 @@ from sqlalchemy import bindparam, text
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.config import config
+from app.core.client import get_ai_client
 from app.meeting.models import Meeting
 
 
@@ -17,18 +19,35 @@ class RelatedMeetingsFinder:
         self.session = session
 
     async def rank(self, meeting_id: UUID, meeting: Meeting) -> list[UUID]:
-        if meeting.summary_embedding is None:
-            return []
+        with get_ai_client().langfuse.start_as_current_observation(
+            name="related_meetings.rank",
+            as_type="retriever",
+            input={"meeting_id": str(meeting_id)},
+            metadata={
+                "environment": config.ENV,
+                "summary_distance_limit": self.SUMMARY_DISTANCE_LIMIT,
+                "topic_distance_limit": self.TOPIC_DISTANCE_LIMIT,
+                "minimum_shared_topics": self.MIN_SHARED_TOPICS,
+            },
+        ) as observation:
+            if meeting.summary_embedding is None:
+                observation.update(output={"meeting_ids": []})
+                return []
 
-        scores: dict[UUID, float] = {}
-        for mid, distance in await self._summary_neighbors(meeting_id, meeting.summary_embedding):
-            scores[mid] = max(scores.get(mid, 0.0), 1.0 - distance)
+            scores: dict[UUID, float] = {}
+            for mid, distance in await self._summary_neighbors(
+                meeting_id,
+                meeting.summary_embedding,
+            ):
+                scores[mid] = max(scores.get(mid, 0.0), 1.0 - distance)
 
-        for mid, shared in await self._shared_topic_counts(meeting_id):
-            scores[mid] = max(scores.get(mid, 0.0), min(1.0, shared / 5.0))
+            for mid, shared in await self._shared_topic_counts(meeting_id):
+                scores[mid] = max(scores.get(mid, 0.0), min(1.0, shared / 5.0))
 
-        ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
-        return [mid for mid, _ in ranked[: self.MAX_RESULTS]]
+            ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+            result = [mid for mid, _ in ranked[: self.MAX_RESULTS]]
+            observation.update(output={"meeting_ids": [str(mid) for mid in result]})
+            return result
 
     async def _summary_neighbors(self, meeting_id: UUID, embedding: list[float]) -> list[tuple[UUID, float]]:
         query = (

@@ -11,6 +11,7 @@ from app.chat.services.prompt_builder import PromptBuilder
 from app.chat.services.responder import ChatResponder
 from app.chat.services.retrieval import ChatRetriever
 from app.chat.services.streaming import ChatMessageStreamer
+from app.core.client import get_ai_client
 from app.db import SessionDep
 
 
@@ -33,7 +34,7 @@ ChatResponderDep = Annotated[ChatResponder, Depends(get_responder)]
 
 
 def get_chat_retriever(session: SessionDep) -> ChatRetriever:
-    return ChatRetriever(session)
+    return ChatRetriever(session, get_ai_client())
 
 
 ChatRetrieverDep = Annotated[ChatRetriever, Depends(get_chat_retriever)]

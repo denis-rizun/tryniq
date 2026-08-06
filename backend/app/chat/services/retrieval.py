@@ -10,7 +10,7 @@ from app.chat.constants import ChatScope
 from app.chat.models import UtteranceEmbedding
 from app.chat.services.graph_hits import GraphHit, GraphHitBuilder
 from app.config import config
-from app.core.client import get_ai_client
+from app.core.client import AIClient, get_ai_client
 from app.graph.constants import EdgeType, NodeType
 from app.graph.models import GraphEdge, GraphNode
 from app.meeting.constants import MeetingStatus
@@ -45,25 +45,74 @@ class RetrievedContext:
 
 
 class ChatRetriever:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, ai_client: AIClient | None = None) -> None:
         self._session = session
+        self._ai_client = ai_client or get_ai_client()
         self._graph_hits = GraphHitBuilder(session)
 
     async def retrieve(self, query: str, scope: ChatScope, meeting_id: UUID | None) -> RetrievedContext:
-        vectors = await get_ai_client().embed([query])
-        query_vector = vectors[0] if vectors else None
+        trace_metadata = {
+            "environment": config.ENV,
+            "feature": "rag-retrieval",
+            "scope": str(scope),
+            "utterance_top_k": config.chat.UTTERANCE_TOP_K_ALL,
+            "graph_top_k": config.chat.GRAPH_TOP_K_ALL,
+        }
+        with self._ai_client.langfuse.start_as_current_observation(
+            name="rag.retrieve",
+            as_type="span",
+            input={"query": query, "meeting_id": str(meeting_id) if meeting_id else None},
+            metadata=trace_metadata,
+        ) as retrieval_span:
+            vectors = await self._ai_client.embed([query])
+            query_vector = vectors[0] if vectors else None
 
-        if scope == ChatScope.MEETING and meeting_id:
-            utterances = await self._load_meeting_transcript(meeting_id)
-            graph_nodes = await self._graph_hits.load_meeting_graph(meeting_id)
-        elif query_vector is None:
-            utterances = []
-            graph_nodes = []
-        else:
-            utterances = await self._search_utterances(query_vector, scope, meeting_id, config.chat.UTTERANCE_TOP_K_ALL)
-            graph_nodes = await self._graph_hits.search_all(query, query_vector, config.chat.GRAPH_TOP_K_ALL)
-            source_utterances = await self._load_source_utterances([hit.node_id for hit in graph_nodes])
-            utterances = self._merge_utterances(utterances, source_utterances)
+            with self._ai_client.langfuse.start_as_current_observation(
+                name="rag.retrieve.utterances",
+                as_type="retriever",
+                input={"query": query, "scope": str(scope)},
+            ) as utterance_span:
+                if scope == ChatScope.MEETING and meeting_id:
+                    utterances = await self._load_meeting_transcript(meeting_id)
+                elif query_vector is None:
+                    utterances = []
+                else:
+                    utterances = await self._search_utterances(
+                        query_vector,
+                        scope,
+                        meeting_id,
+                        config.chat.UTTERANCE_TOP_K_ALL,
+                    )
+                utterance_span.update(output={"hit_count": len(utterances)})
+
+            with self._ai_client.langfuse.start_as_current_observation(
+                name="rag.retrieve.graph",
+                as_type="retriever",
+                input={"query": query, "scope": str(scope)},
+            ) as graph_span:
+                if scope == ChatScope.MEETING and meeting_id:
+                    graph_nodes = await self._graph_hits.load_meeting_graph(meeting_id)
+                elif query_vector is None:
+                    graph_nodes = []
+                else:
+                    graph_nodes = await self._graph_hits.search_all(
+                        query,
+                        query_vector,
+                        config.chat.GRAPH_TOP_K_ALL,
+                    )
+                graph_span.update(output={"hit_count": len(graph_nodes)})
+
+            if query_vector is not None and scope != ChatScope.MEETING:
+                source_utterances = await self._load_source_utterances(
+                    [hit.node_id for hit in graph_nodes]
+                )
+                utterances = self._merge_utterances(utterances, source_utterances)
+            retrieval_span.update(
+                output={
+                    "utterance_hits": len(utterances),
+                    "graph_hits": len(graph_nodes),
+                }
+            )
 
         logger.debug(
             "chat retrieval done",

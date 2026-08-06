@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from uuid import UUID
 
 import structlog
@@ -19,6 +20,15 @@ from app.transcript.models import Utterance
 logger = structlog.get_logger()
 
 
+@dataclass(frozen=True, slots=True)
+class MetadataServiceResult:
+    completed: bool
+    have_metadata: bool
+    retry_count: int
+    fallback_used: bool
+    skipped_reason: str | None = None
+
+
 class MetadataService:
     def __init__(
         self,
@@ -34,20 +44,33 @@ class MetadataService:
         self.related_finder = related_finder
         self.reader = reader
 
-    async def extract_metadata(self, meeting_id: UUID) -> None:
+    async def extract_metadata(self, meeting_id: UUID) -> MetadataServiceResult:
         meeting = (await self.session.exec(select(Meeting).where(Meeting.id == meeting_id))).one_or_none()
         if not meeting:
             logger.warning("Meeting was not found for metadata extraction", meeting_id=str(meeting_id))
-            return
+            return MetadataServiceResult(
+                completed=False,
+                have_metadata=False,
+                retry_count=0,
+                fallback_used=False,
+                skipped_reason="meeting_not_found",
+            )
 
         utterances = await self._load_utterances(meeting_id)
         if not utterances:
             logger.info("Skipping metadata extraction without utterances", meeting_id=str(meeting_id))
-            return
+            return MetadataServiceResult(
+                completed=False,
+                have_metadata=False,
+                retry_count=0,
+                fallback_used=False,
+                skipped_reason="no_utterances",
+            )
 
         participants = await self._load_participants(meeting_id)
         references = MetadataReferences(utterances, participants)
-        metadata = await self.extractor.extract(references)
+        extraction = await self.extractor.extract_with_status(references)
+        metadata = extraction.metadata
 
         await self.writer.reset_generated(meeting_id)
         person_ref_to_node = await self.writer.ensure_persons(meeting_id, participants)
@@ -68,6 +91,12 @@ class MetadataService:
             "Meeting metadata extraction finished",
             meeting_id=str(meeting_id),
             have_metadata=metadata is not None,
+        )
+        return MetadataServiceResult(
+            completed=True,
+            have_metadata=metadata is not None,
+            retry_count=extraction.retry_count,
+            fallback_used=extraction.fallback_used,
         )
 
     async def get_meeting_metadata(self, meeting_id: UUID) -> MeetingMetadataResponse:

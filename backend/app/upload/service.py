@@ -3,7 +3,7 @@ import tempfile
 from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import UUID, uuid5
 
 import structlog
 from botocore.exceptions import BotoCoreError, ClientError
@@ -93,9 +93,15 @@ class UploadService:
             await ffmpeg_client.normalize_to_wav(str(src_path), str(wav_path))
 
             await self._publish(meeting_id, MeetingStatus.DIARIZING, LifecycleEvent.DIARIZING)
-            diar_segments = await get_diarization_client().diarize(str(wav_path))
+            diarization = await get_diarization_client().diarize_with_status(str(wav_path))
+            diar_segments = list(diarization.segments)
             cluster_count = len({d.cluster_id for d in diar_segments}) or 1
-            logger.info("diarization done", meeting_id=meeting_id, clusters=cluster_count)
+            logger.info(
+                "diarization done",
+                meeting_id=meeting_id,
+                clusters=cluster_count,
+                fallback_used=diarization.fallback_used,
+            )
 
             await self._publish(meeting_id, MeetingStatus.TRANSCRIBING, LifecycleEvent.TRANSCRIBING)
             segments = await asyncio.to_thread(get_faster_whisper_client().transcribe, str(wav_path))
@@ -103,9 +109,14 @@ class UploadService:
 
             grouped = self._align_segments_to_clusters(segments, diar_segments)
             for cluster_id in sorted(grouped):
-                stream_id = uuid4()
+                stream_id = uuid5(meeting_id, f"upload-cluster:{cluster_id}")
                 label = DEFAULT_SPEAKER_LABEL.format(idx=cluster_id + 1)
-                participant = await self.participant_service.create_for_upload(meeting_id, stream_id, label)
+                participant = await self.participant_service.create(
+                    meeting_id,
+                    stream_id,
+                    label,
+                    is_local_user=False,
+                )
                 await self.transcript_service.replace_final_for_stream(
                     meeting_id, participant.id, stream_id, grouped[cluster_id]
                 )

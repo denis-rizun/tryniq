@@ -69,12 +69,13 @@ class AISettings(BaseSettings):
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
     LANGFUSE_PUBLIC_KEY: SecretStr = SecretStr("")
     LANGFUSE_SECRET_KEY: SecretStr = SecretStr("")
+    LANGFUSE_ENVIRONMENT: str = "development"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(**BASE_MODEL_CONFIG)
 
-    ENV: Literal["DEV", "PROD"] = "DEV"
+    ENV: Literal["DEV", "EVAL", "PROD"] = "DEV"
     api: APISettings = Field(default_factory=APISettings)
     logging: LoggerSettings = Field(default_factory=LoggerSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)

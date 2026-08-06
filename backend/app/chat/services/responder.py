@@ -19,6 +19,7 @@ from app.chat.services.retrieval import RetrievedContext, UtteranceHit
 from app.config import config
 from app.core.client import get_ai_client
 from app.core.constants import AIRequestKind, ChatRequest
+from app.core.prompts import CHAT_PROMPT
 
 if TYPE_CHECKING:
     from app.chat.services.prompt_builder import PromptBuilder
@@ -70,23 +71,44 @@ class ChatResponder:
             messages=messages,
             model=model,
             max_tokens=config.chat.MAX_OUTPUT_TOKENS,
-            langfuse_kwargs=_build_langfuse_kwargs(scope, session_id),
+            langfuse_kwargs={
+                "name": "chat.answer.generation",
+                "metadata": {
+                    **_build_langfuse_kwargs(scope, session_id)["metadata"],
+                    **CHAT_PROMPT.metadata(),
+                },
+            },
         )
 
-        full_text = ""
-        async for chunk in ai_client.stream_chat(request):
-            if not chunk.choices:
-                continue
+        with ai_client.langfuse.start_as_current_observation(
+            name="chat.answer",
+            as_type="span",
+            input={"query": query, "scope": str(scope)},
+            metadata={
+                **CHAT_PROMPT.metadata(),
+                "environment": config.ENV,
+                "model": model,
+                "retrieved_utterances": len(context.utterances),
+                "retrieved_graph_nodes": len(context.graph_nodes),
+            },
+        ) as observation:
+            full_text = ""
+            async for chunk in ai_client.stream_chat(request):
+                if not chunk.choices:
+                    continue
 
-            delta = chunk.choices[0].delta.content or ""
-            if not delta:
-                continue
+                delta = chunk.choices[0].delta.content or ""
+                if not delta:
+                    continue
 
-            full_text += delta
-            yield AnswerDelta(text=delta)
+                full_text += delta
+                yield AnswerDelta(text=delta)
 
-        rendered_text, citations = self._finalize(full_text, scope, context)
-        yield AnswerComplete(text=rendered_text, citations=citations, model=model)
+            rendered_text, citations = self._finalize(full_text, scope, context)
+            observation.update(
+                output={"text": rendered_text, "citation_count": len(citations)}
+            )
+            yield AnswerComplete(text=rendered_text, citations=citations, model=model)
 
     @staticmethod
     def _finalize(

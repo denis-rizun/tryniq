@@ -16,6 +16,8 @@ from app.asr.schemas import (
     HandshakeEvent,
     PartialTranscriptEvent,
 )
+from app.config import config
+from app.core.client import get_ai_client
 from app.core.decorators import suppress_ws_disconnect
 from app.meeting.client import redis_client
 from app.participant.service import ParticipantService
@@ -37,19 +39,36 @@ class LiveASRService:
 
     @suppress_ws_disconnect
     async def run_session(self, ws: WebSocket) -> None:
-        await ws.accept()
-        handshake = await self._read_handshake(ws)
-        if handshake is None:
-            return
+        with get_ai_client().langfuse.start_as_current_observation(
+            name="asr.live",
+            as_type="span",
+            metadata={"environment": config.ENV, "feature": "live-asr"},
+        ) as observation:
+            await ws.accept()
+            handshake = await self._read_handshake(ws)
+            if handshake is None:
+                observation.update(level="WARNING", status_message="invalid handshake")
+                return
 
-        worker = await self.client.register_worker(ws, handshake.worker_id, handshake.capacity)
-        try:
-            await self._consume_worker_messages(ws, worker)
-        except (RedisError, SQLAlchemyError):
-            logger.exception("worker session error", worker_id=handshake.worker_id)
-        finally:
-            await self._flush_pending_segments(worker)
-            await self.client.unregister_worker(worker)
+            observation.update(
+                input={
+                    "worker_id": handshake.worker_id,
+                    "capacity": handshake.capacity,
+                }
+            )
+            worker = await self.client.register_worker(
+                ws,
+                handshake.worker_id,
+                handshake.capacity,
+            )
+            try:
+                await self._consume_worker_messages(ws, worker)
+            except (RedisError, SQLAlchemyError) as exc:
+                observation.update(level="ERROR", status_message=str(exc))
+                logger.exception("worker session error", worker_id=handshake.worker_id)
+            finally:
+                await self._flush_pending_segments(worker)
+                await self.client.unregister_worker(worker)
 
     @staticmethod
     async def _read_handshake(ws: WebSocket) -> HandshakeEvent | None:
